@@ -90,7 +90,7 @@ await evolution.applyImprovement(improvements[0]);
 - **Progress Files**: `${os.tmpdir()}/evolution_tests/*.json` (e.g., `/tmp` on macOS/Linux)
 
 ## Troubleshooting
-- **"Command timed out after 2m"** → Use `timeout 7m node -e "..."` for proper timeout
+- **"Command timed out after 2m"** → Use `timeout 7m npx tsx src/experimental/evolutionary/runEvolutionTest.ts` for proper timeout
 - **"Evolution system not initialized"** → Call `initialize()` first
 - **"All agents completed"** → Call `analyzeGeneration()` then `nextGeneration()`
 - **No telemetry captured?** → 
@@ -98,7 +98,7 @@ await evolution.applyImprovement(improvements[0]);
   - ✅ Verify agent used `set_environment_variable` to enable telemetry 
   - ✅ Still call `processAgentCompletion()` - has fallback telemetry
 - **Document contamination?** → NEVER skip `processAgentCompletion()` - contains reset logic
-- **Session ID mismatch?** → Kill competing node processes: `pkill -f "node -e"`
+- **Session ID mismatch?** → Kill competing tsx processes: `pkill -f "tsx.*evolutionary"`
 - **Lost progress?** → Use `saveProgress()` and `loadProgress()`
 
 ## Success Metrics
