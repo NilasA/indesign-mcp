@@ -51,10 +51,10 @@ export async function registerLayoutTools(server: McpServer): Promise<void> {
     "Layout Management Tool - Requires spatial context checking",
     {
       textframe_index: z.number().default(0).describe("Index of text frame (0-based). 📋 WORKFLOW: Use get_textframe_info() first to see available frames"),
-      x: z.number().describe("X position in points. ⚠️ Check page dimensions first with get_page_dimensions()"),
-      y: z.number().describe("Y position in points. 💡 TIP: Verify available space before positioning"),
-      width: z.number().default(-1).describe("Width in points (optional). 📋 See document_creation_strategy → Layout Operations for complete workflow"),
-      height: z.number().default(-1).describe("Height in points (optional)")
+      x: z.union([z.number(), z.string()]).describe("X position (supports units: 100, '50mm', '2in', '72pt', '50%', 'center'). ⚠️ Check page dimensions first with get_page_dimensions()"),
+      y: z.union([z.number(), z.string()]).describe("Y position (supports units: 100, '50mm', '2in', '72pt', '50%', 'center'). 💡 TIP: Verify available space before positioning"),
+      width: z.union([z.number(), z.string()]).default(-1).describe("Width (supports units: 100, '50mm', '2in', '72pt', '50%'). 📋 See document_creation_strategy → Layout Operations for complete workflow"),
+      height: z.union([z.number(), z.string()]).default(-1).describe("Height (supports units: 100, '50mm', '2in', '72pt', '50%')")
     },
     withChangeTracking(server, "position_textframe")(async (args: any) => {
       return await handlePositionTextFrame(args);
@@ -66,10 +66,10 @@ export async function registerLayoutTools(server: McpServer): Promise<void> {
     "create_textframe",
     "Layout Management Tool - Requires spatial context checking",
     {
-      x: z.number().describe("X position in points. ⚠️ Check page dimensions first with get_page_dimensions()"),
-      y: z.number().describe("Y position in points. 💡 TIP: Verify available space before creating frames"),
-      width: z.number().describe("Width in points. 📋 WORKFLOW: Use document_creation_strategy prompt for complete positioning guidance"),
-      height: z.number().describe("Height in points"),
+      x: z.union([z.number(), z.string()]).describe("X position (supports units: 100, '50mm', '2in', '72pt', '50%', 'center'). ⚠️ Check page dimensions first with get_page_dimensions()"),
+      y: z.union([z.number(), z.string()]).describe("Y position (supports units: 100, '50mm', '2in', '72pt', '50%', 'center'). 💡 TIP: Verify available space before creating frames"),
+      width: z.union([z.number(), z.string()]).describe("Width (supports units: 100, '50mm', '2in', '72pt', '50%'). 📋 WORKFLOW: Use document_creation_strategy prompt for complete positioning guidance"),
+      height: z.union([z.number(), z.string()]).describe("Height (supports units: 100, '50mm', '2in', '72pt', '50%')"),
       page_number: z.number().default(1).describe("Page number (1-based). 📋 Verify with get_page_info() first"),
       text_content: z.string().default("").describe("Initial text content")
     },
