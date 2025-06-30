@@ -81,3 +81,30 @@ This is an experimental project. Some tools may have limitations or edge cases. 
 ## License
 
 MIT
+
+## Environment Variable Helpers
+
+All runtime configuration is now accessed via the typed helpers in `src/utils/env.ts`.
+
+Example:
+
+```ts
+import { ENV, getBool, getInt, getString } from "./src/utils/env.js";
+
+if (ENV.telemetryEnabled()) {
+  // ...
+}
+```
+
+Direct reads of `process.env` have been removed (and are lint-guarded by `node/no-process-env`).
+Assignments (e.g. in the Task runner and utility tools) are still allowed and whitelisted with inline eslint comments.
+
+Key variables:
+
+* `TELEMETRY_ENABLED` – turn telemetry capture on/off
+* `EVOLUTION_SESSION_ID` – session identifier shared between agents
+* `TELEMETRY_SESSION_ID` – fallback session id for non-evolution contexts
+* `TELEMETRY_AGENT_ID` – logical agent identifier (defaults to `task-agent`)
+* `TELEMETRY_GENERATION` – current generation number (integer)
+
+See `src/utils/env.ts` for the complete list and default values.

@@ -27,6 +27,7 @@ import { ToolModifier } from './toolModifier.js';
 import { ImprovementManager } from './improvementManager.js';
 import { GitManager } from './gitManager.js';
 import { TestConfig, TestRun, Improvement } from './types.js';
+import { getBool } from '../../utils/env.js';
 
 /**
  * Example workflow showing how Claude Code orchestrates evolution
@@ -40,8 +41,8 @@ import { TestConfig, TestRun, Improvement } from './types.js';
  */
 export async function exampleEvolutionWorkflow() {
   // Debug logging configuration for examples
-  const DEBUG_EXAMPLES = process.env.DEBUG_EXAMPLES === 'true';
-  const DEBUG_ALL = process.env.DEBUG_ALL === 'true';
+  const DEBUG_EXAMPLES = getBool('DEBUG_EXAMPLES', false);
+  const DEBUG_ALL = getBool('DEBUG_ALL', false);
   const debugLog = (message: string) => {
     if (DEBUG_EXAMPLES || DEBUG_ALL) {
       console.log(`📚 ${message}`);
@@ -69,7 +70,7 @@ export async function exampleEvolutionWorkflow() {
   
   // Configuration
   const config: TestConfig = {
-    testCase: 'academic-book-page',
+    testCase: 'book-page',
     agentCount: 3,
     generation: 1,
     maxGenerations: 5,

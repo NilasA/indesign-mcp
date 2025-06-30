@@ -3,15 +3,17 @@
  * Provides standardized debug flags and logging utilities across all evolutionary modules
  */
 
+import { getBool } from "../../utils/env.js";
+
 // Debug environment variables
-const DEBUG_TELEMETRY = process.env.DEBUG_TELEMETRY === 'true';
-const DEBUG_EVOLUTION = process.env.DEBUG_EVOLUTION === 'true';
-const DEBUG_PATTERNS = process.env.DEBUG_PATTERNS === 'true';
-const DEBUG_AGENT = process.env.DEBUG_AGENT === 'true';
-const DEBUG_TESTING = process.env.DEBUG_TESTING === 'true';
-const DEBUG_VALIDATION = process.env.DEBUG_VALIDATION === 'true';
-const DEBUG_EXAMPLES = process.env.DEBUG_EXAMPLES === 'true';
-const DEBUG_ALL = process.env.DEBUG_ALL === 'true';
+const DEBUG_TELEMETRY = getBool('DEBUG_TELEMETRY');
+const DEBUG_EVOLUTION = getBool('DEBUG_EVOLUTION');
+const DEBUG_PATTERNS = getBool('DEBUG_PATTERNS');
+const DEBUG_AGENT = getBool('DEBUG_AGENT');
+const DEBUG_TESTING = getBool('DEBUG_TESTING');
+const DEBUG_VALIDATION = getBool('DEBUG_VALIDATION');
+const DEBUG_EXAMPLES = getBool('DEBUG_EXAMPLES');
+const DEBUG_ALL = getBool('DEBUG_ALL');
 
 // Emoji prefixes for consistent formatting
 export const LOG_PREFIXES = {

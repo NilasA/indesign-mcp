@@ -13,6 +13,7 @@ import { registerStrategicPrompts } from "./prompts/index.js";
 import { registerResources } from "./resources/index.js";
 import { createTelemetryServer } from "./tools/telemetryServer.js";
 import { setTelemetryEnabled } from "./tools/index.js";
+import { ENV } from "./utils/env.js";
 
 /**
  * Server configuration and identity
@@ -80,9 +81,9 @@ export { createInDesignMcpServer };
 async function main(): Promise<void> {
   try {
     // Auto-detect telemetry mode for evolutionary testing
-    const enableTelemetry = process.env.TELEMETRY_ENABLED === 'true' ||
-                           process.env.EVOLUTION_SESSION_ID !== undefined ||
-                           process.env.TELEMETRY_SESSION_ID !== undefined;
+    const enableTelemetry = ENV.telemetryEnabled() ||
+                           ENV.evolutionSessionId() !== undefined ||
+                           ENV.telemetrySessionId() !== undefined;
     
     const server = await createInDesignMcpServer(enableTelemetry);
     

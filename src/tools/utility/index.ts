@@ -7,6 +7,7 @@ import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { TextContent } from "@modelcontextprotocol/sdk/types.js";
 import { executeExtendScript } from "../../extendscript.js";
+import { ENV, getString, getInt } from "../../utils/env.js";
 import type { FrameScope, TextFlowAction } from "../../types.js";
 
 /**
@@ -34,9 +35,9 @@ export async function registerUtilityTools(server: McpServer): Promise<void> {
         
         // Environment variable diagnostics
         console.log('📊 Environment Variables:');
-        console.log(`   EVOLUTION_SESSION_ID: ${process.env.EVOLUTION_SESSION_ID || 'None'}`);
-        console.log(`   TELEMETRY_SESSION_ID: ${process.env.TELEMETRY_SESSION_ID || 'None'}`);
-        console.log(`   TELEMETRY_AGENT_ID: ${process.env.TELEMETRY_AGENT_ID || 'None'}`);
+        console.log(`   EVOLUTION_SESSION_ID: ${ENV.evolutionSessionId() || 'None'}`);
+        console.log(`   TELEMETRY_SESSION_ID: ${ENV.telemetrySessionId() || 'None'}`);
+        console.log(`   TELEMETRY_AGENT_ID: ${ENV.telemetryAgentId() || 'task-agent'}`);
         
         const session = await TelemetryCapture.endSession();
         
@@ -78,6 +79,7 @@ export async function registerUtilityTools(server: McpServer): Promise<void> {
     },
     async (args) => {
       // Set the environment variable
+      /* eslint-disable-next-line node/no-process-env */
       process.env[args.name] = args.value;
       
       // CRITICAL: Also flip the in-memory telemetry flag when enabling telemetry
@@ -89,29 +91,28 @@ export async function registerUtilityTools(server: McpServer): Promise<void> {
         setTelemetryEnabled(true);
         
         // Auto-start session if evolution context detected
-        const sessionId = process.env.EVOLUTION_SESSION_ID || 
-                         process.env.TELEMETRY_SESSION_ID;
-        const agentId = process.env.TELEMETRY_AGENT_ID || 'task-agent';
-        const generation = parseInt(process.env.TELEMETRY_GENERATION || '0');
+        const sessionId = ENV.evolutionSessionId() || ENV.telemetrySessionId();
+        const agentId = ENV.telemetryAgentId() || 'task-agent';
+        const generation = ENV.telemetryGeneration();
         
         if (sessionId) {
           // Check if session already exists to prevent double-start
           const existingSession = TelemetryCapture.getCurrentSession();
           if (!existingSession) {
-            if (process.env.DEBUG_TELEMETRY) {
+            if (ENV.debugTelemetry()) {
               console.log(`📊 Evolution context detected - starting telemetry session: ${sessionId}`);
             }
             await TelemetryCapture.startSession(agentId, generation);
-            if (process.env.DEBUG_TELEMETRY) {
+            if (ENV.debugTelemetry()) {
               console.log(`📊 Telemetry session started for agent: ${agentId}, generation: ${generation}`);
             }
           } else {
-            if (process.env.DEBUG_TELEMETRY) {
+            if (ENV.debugTelemetry()) {
               console.log(`📊 Telemetry session already exists: ${existingSession.id}`);
             }
           }
         } else {
-          if (process.env.DEBUG_TELEMETRY) {
+          if (ENV.debugTelemetry()) {
             console.log(`📊 Telemetry enabled but no evolution session ID found - will start session on first tool call`);
           }
         }

@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsparser from '@typescript-eslint/parser';
+import nodePlugin from 'eslint-plugin-node';
 
 export default [
   js.configs.recommended,
@@ -19,6 +20,7 @@ export default [
     },
     plugins: {
       '@typescript-eslint': tseslint,
+      'node': nodePlugin
     },
     rules: {
       // Relaxed TypeScript rules for now
@@ -33,6 +35,7 @@ export default [
       // Allow console.error for MCP logging convention
       'no-console': 'off',
       'no-undef': 'off', // TypeScript handles this better
+      'node/no-process-env': 'error',
     },
   },
   {
@@ -49,5 +52,11 @@ export default [
       'src/guidance/**', // Placeholder files with unused exports
       'src/intelligence/**', // Placeholder files with unused exports
     ],
+  },
+  {
+    files: ['src/utils/env.ts', 'tests/**'],
+    rules: {
+      'node/no-process-env': 'off'
+    }
   },
 ];

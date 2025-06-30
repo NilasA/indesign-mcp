@@ -12,6 +12,7 @@ import { LayoutMetrics, ComparisonResult } from '../../types.js';
 import { getMcpBridge, McpBridge } from './mcpBridge.js';
 import { TestConfig, TestRun, GenerationResult } from './types.js';
 import { getConfig, loadConfigFromEnv, EvolutionTestConfig } from './config.js';
+import { ENV, getBool, getString, getInt } from '../../utils/env.js';
 
 /**
  * Simplified runner that works with Claude Code's Task tool
@@ -90,7 +91,7 @@ export class TaskBasedRunner {
     }
     
     // Check evolution environment variables
-    if (!process.env.EVOLUTION_SESSION_ID) {
+    if (!ENV.evolutionSessionId()) {
       issues.push('⚠️  EVOLUTION_SESSION_ID not set - session coherence may fail');
     }
     
@@ -134,30 +135,34 @@ export class TaskBasedRunner {
    */
   createTaskPrompt(config: TestConfig, agentId: string, sessionId: string): string {
     // Set session ID in environment for Task agent coherence
+    // eslint-disable-next-line node/no-process-env
     process.env.EVOLUTION_SESSION_ID = sessionId;
     
     // Also set additional telemetry environment variables for robustness
+    // eslint-disable-next-line node/no-process-env
     process.env.TELEMETRY_SESSION_ID = sessionId;
+    // eslint-disable-next-line node/no-process-env
     process.env.TELEMETRY_AGENT_ID = agentId;
+    // eslint-disable-next-line node/no-process-env
     process.env.TELEMETRY_GENERATION = config.generation.toString();
     
     // Enhanced environment variable visibility (O3's suggestion)
-    if (process.env.DEBUG_TELEMETRY) {
+    if (ENV.debugTelemetry()) {
       console.log(`\n🔧 Environment Configuration for ${agentId}:`);
-      console.log(`   🔗 EVOLUTION_SESSION_ID: ${process.env.EVOLUTION_SESSION_ID}`);
-      console.log(`   📊 TELEMETRY_SESSION_ID: ${process.env.TELEMETRY_SESSION_ID}`);
-      console.log(`   👤 TELEMETRY_AGENT_ID: ${process.env.TELEMETRY_AGENT_ID}`);
-      console.log(`   🧬 TELEMETRY_GENERATION: ${process.env.TELEMETRY_GENERATION}`);
-      console.log(`   ⚙️  TELEMETRY_ENABLED: ${process.env.TELEMETRY_ENABLED || 'false'}`);
+      console.log(`   🔗 EVOLUTION_SESSION_ID: ${sessionId}`);
+      console.log(`   📊 TELEMETRY_SESSION_ID: ${sessionId}`);
+      console.log(`   👤 TELEMETRY_AGENT_ID: ${agentId}`);
+      console.log(`   🧬 TELEMETRY_GENERATION: ${config.generation}`);
+      console.log(`   ⚙️  TELEMETRY_ENABLED: ${ENV.telemetryEnabled()}`);
       console.log(`   ⏱️  TELEMETRY_WAIT_TIMEOUT: ${this.config.timing.telemetryWaitTimeoutMs}ms`);
     }
     
     // Validate critical environment setup
-    if (!process.env.EVOLUTION_SESSION_ID) {
+    if (!ENV.evolutionSessionId()) {
       console.warn(`⚠️  WARNING: EVOLUTION_SESSION_ID not set - telemetry collection may fail`);
     }
-    if (process.env.EVOLUTION_SESSION_ID !== sessionId) {
-      console.warn(`⚠️  WARNING: Session ID mismatch! Environment: ${process.env.EVOLUTION_SESSION_ID}, Expected: ${sessionId}`);
+    if (ENV.evolutionSessionId() && ENV.evolutionSessionId() !== sessionId) {
+      console.warn(`⚠️  WARNING: Session ID mismatch! Environment: ${ENV.evolutionSessionId()}, Expected: ${sessionId}`);
     }
     
     // Internal tracking (not shown to agent)
@@ -167,7 +172,7 @@ export class TaskBasedRunner {
       testCase: config.testCase,
       sessionId
     };
-    if (process.env.DEBUG_TELEMETRY) {
+    if (ENV.debugTelemetry()) {
       console.log(`Creating prompt for ${agentId} (Gen ${config.generation}, Session: ${sessionId})`);
     }
     
@@ -191,9 +196,12 @@ export class TaskBasedRunner {
     prompt += `SESSION ID: ${sessionId}\n`;
     prompt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     
-    prompt += 'CONTEXT: The InDesign document has been cleared and is ready for your layout.\n\n';
+    prompt += 'TASK: Recreate this book page layout in InDesign using the available MCP tools.\n\n';
     
-    prompt += 'TASK: Recreate this academic book page layout in InDesign using the available MCP tools.\n\n';
+    prompt += 'FONTS TO USE:\n';
+    prompt += '• Headline: Univers LT Std, 65 Bold\n';
+    prompt += '• Body text: Times NR Seven MT Std, Regular\n';
+    prompt += '• Quotation: TT2020Base, Regular\n\n';
     
     // Add reference
     if (config.referenceImage) {
@@ -202,7 +210,7 @@ export class TaskBasedRunner {
       prompt += `Reference: ${config.referenceDescription}\n\n`;
     } else {
       // Fallback minimal description
-      prompt += 'Reference: A typical academic book page with a heading and body text.\n\n';
+      prompt += 'Reference: A book page with a heading and body text.\n\n';
     }
     
     // Prompt self-check validation (O3's suggestion) - enhanced for new format
@@ -212,7 +220,7 @@ export class TaskBasedRunner {
     const hasTripleBackticks = prompt.includes('```');
     const hasScoreWarning = prompt.includes('YOUR SCORE WILL BE 0%');
     
-    if (process.env.DEBUG_TELEMETRY) {
+    if (ENV.debugTelemetry()) {
       console.log(`📋 Enhanced prompt validation for ${agentId}:`);
       console.log(`   ✓ Contains set_environment_variable: ${hasSetEnvVar}`);
       console.log(`   ✓ Contains telemetry_end_session: ${hasTelemetryEnd}`);
@@ -267,7 +275,7 @@ export class TaskBasedRunner {
         const hasStyles = metrics.styles && metrics.styles.length > 0;
         const frameCount = metrics.frames.length;
         
-        if (process.env.DEBUG_TELEMETRY) {
+        if (ENV.debugTelemetry()) {
           console.log(`📊 Document analysis: ${frameCount} frames, ${totalText} chars, ${hasStyles ? 'has styles' : 'no styles'}`);
         }
         
@@ -292,7 +300,7 @@ export class TaskBasedRunner {
         
         if (hasContent) {
           // Document structure analysis
-          if (process.env.DEBUG_TELEMETRY) {
+          if (ENV.debugTelemetry()) {
             console.log(`📊 Inferring workflow from document structure...`);
           }
           
@@ -505,7 +513,7 @@ export class TaskBasedRunner {
    * Compare to reference metrics
    */
   async compareToReference(
-    currentMetrics: LayoutMetrics,
+    _currentMetrics: LayoutMetrics,
     referenceMetrics: LayoutMetrics
   ): Promise<ComparisonResult> {
     console.log('Comparing to reference layout...');

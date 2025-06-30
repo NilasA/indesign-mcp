@@ -16,6 +16,7 @@ import { registerCompositeTools } from "./composite/index.js";
 import { registerAnalysisTools } from "./analysis/index.js";
 import { TelemetryCapture } from "./telemetry.js";
 import { isTelemetryEnabled, setTelemetryEnabled } from "./telemetryFlag.js";
+import { ENV } from "../utils/env.js";
 
 // Export telemetry functions from the singleton module
 export { isTelemetryEnabled, setTelemetryEnabled } from "./telemetryFlag.js";
@@ -33,16 +34,16 @@ export function wrapToolForTelemetry<T extends Record<string, any>>(
 ): (args: T) => Promise<any> {
   return async (args: T) => {
     // Auto-enable telemetry if evolution context detected
-    if (!isTelemetryEnabled() && process.env.EVOLUTION_SESSION_ID) {
-      if (process.env.DEBUG_TELEMETRY) {
+    if (!isTelemetryEnabled() && ENV.evolutionSessionId()) {
+      if (ENV.debugTelemetry()) {
         console.log(`📊 Evolution context detected - auto-enabling telemetry for tool: ${toolName}`);
       }
       setTelemetryEnabled(true);
       
       // Auto-start session if needed and no current session exists
       if (!TelemetryCapture.getCurrentSession()) {
-        const agentId = process.env.TELEMETRY_AGENT_ID || 'task-agent';
-        const generation = parseInt(process.env.TELEMETRY_GENERATION || '0');
+        const agentId = ENV.telemetryAgentId() as string;
+        const generation = ENV.telemetryGeneration();
         // Fire and forget - don't block the tool execution
         TelemetryCapture.startSession(agentId, generation).catch(error => {
           console.error(`📊 Failed to auto-start telemetry session: ${error}`);

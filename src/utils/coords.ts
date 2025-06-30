@@ -7,7 +7,10 @@ export function toPoints(val: number | string, axis: "x"|"y"|"w"|"h", pageWidth:
       return pct * pageHeight;
     }
     if (val === "center") {
-      return axis === "x" ? pageWidth / 2 : pageHeight / 2;
+      if (axis === "x") return pageWidth / 2;
+      if (axis === "y") return pageHeight / 2;
+      // Center is not meaningful for width/height axes
+      throw new Error(`Unsupported coordinate value "center" for axis ${axis}`);
     }
     // Handle string numbers
     const parsed = parseFloat(val);

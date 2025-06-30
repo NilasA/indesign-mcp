@@ -5,6 +5,7 @@ export default {
   extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^@modelcontextprotocol/sdk/testing$': '<rootDir>/__mocks__/@modelcontextprotocol/sdk/testing.js'
   },
   transform: {
     '^.+\\.tsx?$': [

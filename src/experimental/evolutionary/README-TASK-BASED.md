@@ -33,7 +33,7 @@ await runner.initialize();
 
 ```typescript
 const config = {
-  testCase: 'academic-book-page',
+  testCase: 'book-page',
   agentCount: 3,
   generation: 1,
   maxGenerations: 5,

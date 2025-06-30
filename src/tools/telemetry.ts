@@ -6,6 +6,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { getConfig } from '../experimental/evolutionary/config.js';
+import { ENV, getInt, getString } from '../utils/env.js';
 
 /**
  * Tool call telemetry data structure
@@ -48,7 +49,34 @@ export class TelemetryCapture {
   private static telemetryDir: string | null = null;
   private static fileWriteQueue: Promise<void> = Promise.resolve();
   private static pendingWrites: number = 0;
-  private static readonly FLUSH_THRESHOLD = 10; // Flush after 10 pending writes (reduced for shorter Task sessions)
+  // Runtime-configurable parameters (env override)
+  private static config = {
+    flushThreshold: getInt('TELEMETRY_FLUSH_THRESHOLD', 10),
+    flushIntervalMs: getInt('TELEMETRY_FLUSH_INTERVAL_MS', 200),
+    retryDelays: (getString('TELEMETRY_RETRY_DELAYS', '100,200,500,1000,2000')!).split(',').map(n => parseInt(n, 10))
+  } as const;
+  // Buffer individual JSONL lines before hitting disk
+  private static writeBuffer: Map<string, string[]> = new Map();
+  private static flushTimer: NodeJS.Timeout | null = null;
+  private static readonly inTest = typeof process !== 'undefined' && getString('JEST_WORKER_ID') !== undefined;
+  
+  // Register graceful-shutdown hooks only once
+  private static hooksRegistered: boolean = false;
+  
+  /**
+   * Guard against path-traversal or weird chars coming from EVOLUTION_SESSION_ID etc.
+   */
+  private static sanitizeSessionId(sessionId: string): string {
+    // Keep alphanum, dash, underscore – collapse others to underscore
+    return path.basename(sessionId).replace(/[^a-zA-Z0-9-_]/g, '_');
+  }
+  
+  /**
+   * Public wrapper so external modules can await all pending writes.
+   */
+  public static async flush(): Promise<void> {
+    await this.flushWriteQueue();
+  }
   
   /**
    * Initialize telemetry directory
@@ -105,12 +133,13 @@ export class TelemetryCapture {
    */
   static getOrCreateSessionId(agentId: string, generation: number): string {
     // Check multiple environment variable sources for robustness
-    const sessionId = process.env.EVOLUTION_SESSION_ID || 
-                     process.env.TELEMETRY_SESSION_ID ||
-                     process.env.SESSION_ID;
+    const sessionId = ENV.evolutionSessionId() ||
+                     ENV.telemetrySessionId() ||
+                     getString('SESSION_ID') ||
+                     `${Date.now()}-${agentId}-gen${generation}`;
     
     if (sessionId) {
-      if (process.env.DEBUG_TELEMETRY) {
+      if (ENV.debugTelemetry()) {
         console.log(`📊 Found session ID in environment: ${sessionId}`);
       }
       return sessionId;
@@ -118,7 +147,7 @@ export class TelemetryCapture {
     
     // If no environment session ID, try to get from existing session
     if (this.currentSession) {
-      if (process.env.DEBUG_TELEMETRY) {
+      if (ENV.debugTelemetry()) {
         console.log(`📊 Using existing session ID: ${this.currentSession.id}`);
       }
       return this.currentSession.id;
@@ -126,7 +155,7 @@ export class TelemetryCapture {
     
     // Otherwise create a new one
     const newSessionId = `${Date.now()}-${agentId}-gen${generation}`;
-    if (process.env.DEBUG_TELEMETRY) {
+    if (ENV.debugTelemetry()) {
       console.log(`📊 Generated new session ID: ${newSessionId}`);
     }
     return newSessionId;
@@ -141,47 +170,56 @@ export class TelemetryCapture {
     }
     
     const sessionId = call.sessionId || 'no-session';
-    const filePath = path.join(this.telemetryDir!, `${sessionId}.jsonl`);
+    const safeSessionId = this.sanitizeSessionId(sessionId);
+    const filePath = path.join(this.telemetryDir!, `${safeSessionId}.jsonl`);
     
-    // Increment pending writes counter
+    // Buffer the JSON line
+    const line = JSON.stringify(call) + '\n';
+    const buf = this.writeBuffer.get(filePath) || [];
+    buf.push(line);
+    this.writeBuffer.set(filePath, buf);
     this.pendingWrites++;
-    
-    // Queue the write to avoid race conditions
-    this.fileWriteQueue = this.fileWriteQueue.then(async () => {
-      try {
-        // Verify directory exists before write
-        await fs.mkdir(path.dirname(filePath), { recursive: true });
-        
-        // Add detailed logging for debugging
-        console.log(`📊 Writing telemetry call: ${call.tool} to ${filePath}`);
-        
-        await this.writeWithRetry(filePath, JSON.stringify(call) + '\n');
-        this.pendingWrites--;
-        
-        console.log(`📊 Successfully wrote telemetry call for ${sessionId} (${this.pendingWrites} pending)`);
-      } catch (error) {
-        console.error(`📊 Failed to persist telemetry after retries: ${error}`);
-        console.error(`📊 File path: ${filePath}, Session: ${sessionId}, Tool: ${call.tool}`);
-        this.pendingWrites--;
-      }
-    });
-    
-    // Check if we need to flush the queue
-    if (this.pendingWrites >= this.FLUSH_THRESHOLD) {
-      console.log(`📊 Reaching flush threshold (${this.pendingWrites}), flushing write queue...`);
+
+    // If threshold exceeded, flush immediately
+    if (this.pendingWrites >= this.config.flushThreshold) {
       await this.flushWriteQueue();
+    } else {
+      // Otherwise schedule a flush
+      this.scheduleFlush();
     }
-    
-    return this.fileWriteQueue;
+    return Promise.resolve();
+  }
+  
+  /** Schedule buffer flush based on interval */
+  private static scheduleFlush() {
+    if (this.flushTimer) return;
+    this.flushTimer = setTimeout(async () => {
+      await this.flushWriteQueue();
+      this.flushTimer = null;
+    }, this.config.flushIntervalMs);
   }
   
   /**
    * Flush the write queue to ensure all pending writes complete
    */
   private static async flushWriteQueue(): Promise<void> {
-    console.log(`Flushing telemetry write queue (${this.pendingWrites} pending writes)...`);
-    await this.fileWriteQueue;
-    console.log('Telemetry write queue flushed');
+    if (this.pendingWrites === 0 && this.writeBuffer.size === 0) return;
+    if (!this.inTest) {
+      console.log(`Flushing telemetry write queue (${this.pendingWrites} pending writes)...`);
+    }
+
+    const writePromises: Promise<void>[] = [];
+    for (const [filePath, lines] of this.writeBuffer.entries()) {
+      const data = lines.join('');
+      this.writeBuffer.set(filePath, []);
+      writePromises.push(this.writeWithRetry(filePath, data));
+    }
+
+    await Promise.all(writePromises);
+    this.pendingWrites = 0;
+    if (!this.inTest) {
+      console.log('Telemetry write queue flushed');
+    }
   }
   
   /**
@@ -192,7 +230,7 @@ export class TelemetryCapture {
     data: string, 
     maxRetries: number = 5
   ): Promise<void> {
-    const delays = [100, 200, 500, 1000, 2000]; // Exponential backoff in ms
+    const delays = this.config.retryDelays;
     let lastError: Error | null = null;
     
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -244,11 +282,12 @@ export class TelemetryCapture {
       await this.initializeTelemetryDir();
     }
     
-    const filePath = path.join(this.telemetryDir!, `${sessionId}.jsonl`);
+    const safeSessionId = this.sanitizeSessionId(sessionId);
+    const filePath = path.join(this.telemetryDir!, `${safeSessionId}.jsonl`);
     const sentinel = {
       type: 'session-complete',
       timestamp: Date.now(),
-      sessionId
+      sessionId: safeSessionId
     };
     
     try {
@@ -269,9 +308,9 @@ export class TelemetryCapture {
     }
     
     // Generate session ID directly here to avoid recursion
-    const sessionId = process.env.EVOLUTION_SESSION_ID || 
-                     process.env.TELEMETRY_SESSION_ID ||
-                     process.env.SESSION_ID ||
+    const sessionId = ENV.evolutionSessionId() ||
+                     ENV.telemetrySessionId() ||
+                     getString('SESSION_ID') ||
                      `${Date.now()}-${agentId}-gen${generation}`;
     
     this.currentSession = {
@@ -288,9 +327,27 @@ export class TelemetryCapture {
     // Initialize telemetry directory if needed
     await this.initializeTelemetryDir();
     
-    if (process.env.DEBUG_TELEMETRY) {
+    if (ENV.debugTelemetry()) {
       console.log(`📊 Started telemetry session: ${sessionId} for ${agentId} (Generation ${generation})`);
       console.log(`📊 Telemetry directory: ${this.telemetryDir}`);
+    }
+    
+    // Register graceful-shutdown hooks (only once)
+    if (!this.hooksRegistered) {
+      const flushAndEnd = async () => {
+        try {
+          await TelemetryCapture.flush();
+          await TelemetryCapture.endSession();
+        } catch (_) {
+          /* ignore */
+        }
+      };
+      process.once('beforeExit', flushAndEnd);
+      process.once('SIGINT', async () => {
+        await flushAndEnd();
+        process.exit(0);
+      });
+      this.hooksRegistered = true;
     }
     
     return sessionId;
@@ -525,7 +582,8 @@ export class TelemetryCapture {
       await this.initializeTelemetryDir();
     }
     
-    const filePath = path.join(this.telemetryDir!, `${sessionId}.jsonl`);
+    const safeSessionId = this.sanitizeSessionId(sessionId);
+    const filePath = path.join(this.telemetryDir!, `${safeSessionId}.jsonl`);
     
     try {
       const content = await fs.readFile(filePath, 'utf8');
@@ -568,7 +626,7 @@ export class TelemetryCapture {
       }
       
       return {
-        id: sessionId,
+        id: safeSessionId,
         startTime: startTime || Date.now(),
         endTime: endTime || Date.now(),
         agentId,
@@ -590,13 +648,14 @@ export class TelemetryCapture {
     }
     
     // Make timeout configurable via environment
-    const configuredTimeout = parseInt(process.env.TELEMETRY_WAIT_TIMEOUT || timeout.toString());
-    const progressInterval = parseInt(process.env.TELEMETRY_PROGRESS_INTERVAL || '15000'); // 15s default
-    const checkInterval = parseInt(process.env.TELEMETRY_CHECK_INTERVAL || '500'); // 0.5s default
+    const configuredTimeout = getInt('TELEMETRY_WAIT_TIMEOUT', timeout);
+    const progressInterval = getInt('TELEMETRY_PROGRESS_INTERVAL', 15000);
+    const checkInterval = getInt('TELEMETRY_CHECK_INTERVAL', 500);
     
     console.log(`📊 Waiting for session completion: ${sessionId} (timeout: ${configuredTimeout}ms)`);
     
-    const filePath = path.join(this.telemetryDir!, `${sessionId}.jsonl`);
+    const safeSessionId = this.sanitizeSessionId(sessionId);
+    const filePath = path.join(this.telemetryDir!, `${safeSessionId}.jsonl`);
     const startTime = Date.now();
     let lastProgressTime = startTime;
     let lastFileSize = 0;
@@ -711,13 +770,13 @@ export class TelemetryCapture {
       sessionsCount: this.sessions.size,
       callsCount: this.calls.length,
       environment: {
-        EVOLUTION_SESSION_ID: process.env.EVOLUTION_SESSION_ID,
-        TELEMETRY_SESSION_ID: process.env.TELEMETRY_SESSION_ID,
-        TELEMETRY_AGENT_ID: process.env.TELEMETRY_AGENT_ID,
-        TELEMETRY_GENERATION: process.env.TELEMETRY_GENERATION,
-        TELEMETRY_WAIT_TIMEOUT: process.env.TELEMETRY_WAIT_TIMEOUT,
-        TELEMETRY_PROGRESS_INTERVAL: process.env.TELEMETRY_PROGRESS_INTERVAL,
-        TELEMETRY_CHECK_INTERVAL: process.env.TELEMETRY_CHECK_INTERVAL
+        EVOLUTION_SESSION_ID: ENV.evolutionSessionId(),
+        TELEMETRY_SESSION_ID: ENV.telemetrySessionId(),
+        TELEMETRY_AGENT_ID: ENV.telemetryAgentId(),
+        TELEMETRY_GENERATION: getString('TELEMETRY_GENERATION'),
+        TELEMETRY_WAIT_TIMEOUT: getString('TELEMETRY_WAIT_TIMEOUT'),
+        TELEMETRY_PROGRESS_INTERVAL: getString('TELEMETRY_PROGRESS_INTERVAL'),
+        TELEMETRY_CHECK_INTERVAL: getString('TELEMETRY_CHECK_INTERVAL')
       }
     };
   }

@@ -4,6 +4,7 @@
  */
 
 import { TestConfig, TestRun, Pattern, Improvement } from './types.js';
+import { getBool } from '../../utils/env.js';
 
 /**
  * Validation errors that can occur
@@ -127,7 +128,7 @@ export class WorkflowValidator {
    */
   static validateTaskBasedApproach(): void {
     // Check for common mistakes
-    if (typeof process !== 'undefined' && process.env.EVOLUTION_USE_SIMULATION) {
+    if (typeof process !== 'undefined' && getBool('EVOLUTION_USE_SIMULATION', false)) {
       throw new ValidationError(
         'Simulation mode is not compatible with Task-based approach',
         'SIMULATION_NOT_SUPPORTED'
@@ -151,7 +152,7 @@ export class WorkflowValidator {
   static isClaudeCodeEnvironment(): boolean {
     // This is a heuristic check - Claude Code would be invoking Task tool
     // In practice, this would be set by Claude Code when running
-    return process.env.CLAUDE_CODE_ORCHESTRATION === 'true';
+    return getBool('CLAUDE_CODE_ORCHESTRATION', false);
   }
 }
 

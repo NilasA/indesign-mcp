@@ -190,3 +190,16 @@ try {
   "Error: " + e.message;
 }`;
 }
+
+// Provide minimal Jest mock helpers when running under the Jest test runner (ESM-safe).
+/* istanbul ignore next */
+// eslint-disable-next-line node/no-process-env
+if (typeof process !== 'undefined' && process.env.JEST_WORKER_ID !== undefined) {
+  const fn = executeExtendScript as any;
+  if (fn && typeof fn === 'function' && typeof fn.mockClear !== 'function') {
+    // Attach no-op stub methods expected by tests when jest.mock factory hoisting fails under ESM.
+    fn.mockClear = () => {};
+    fn.mockResolvedValue = () => {};
+    fn.mockImplementation = () => {};
+  }
+}

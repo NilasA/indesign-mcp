@@ -175,7 +175,7 @@ describe('Pattern Analyzer', () => {
       mockTestRuns,
       patterns,
       'book-page.jpg',
-      'Recreate academic book layout'
+      'Recreate book layout'
     );
     
     expect(analysis).toBeDefined();
@@ -199,7 +199,7 @@ describe('Pattern Analyzer', () => {
       mockTestRuns,
       patterns,
       'book-page.jpg',
-      'Recreate academic book layout'
+      'Recreate book layout'
     );
     
     const report = presenter.generateReport(analysis);

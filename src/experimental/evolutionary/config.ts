@@ -5,6 +5,7 @@
 
 import * as path from 'path';
 import * as os from 'os';
+import { getString, getInt } from '../../utils/env.js';
 
 /**
  * Evolutionary testing configuration
@@ -124,40 +125,36 @@ export function getConfig(overrides?: Partial<EvolutionTestConfig>): EvolutionTe
 export function loadConfigFromEnv(): Partial<EvolutionTestConfig> {
   const config: Partial<EvolutionTestConfig> = {};
   
-  // Check for base directory override
-  if (process.env.EVOLUTION_TEST_DIR) {
-    const baseDir = process.env.EVOLUTION_TEST_DIR;
+  // Base directory override
+  const baseDirFromEnv = getString('EVOLUTION_TEST_DIR');
+  if (baseDirFromEnv) {
     config.paths = {
-      baseDir,
-      telemetryDir: path.join(baseDir, 'telemetry'),
-      documentsDir: path.join(baseDir, 'documents'),
-      resultsDir: path.join(baseDir, 'results'),
-      progressDir: path.join(baseDir, 'progress')
+      baseDir: baseDirFromEnv,
+      telemetryDir: path.join(baseDirFromEnv, 'telemetry'),
+      documentsDir: path.join(baseDirFromEnv, 'documents'),
+      resultsDir: path.join(baseDirFromEnv, 'results'),
+      progressDir: path.join(baseDirFromEnv, 'progress')
     };
   }
   
-  // Check for timing overrides
-  if (process.env.EVOLUTION_TIMEOUT_MS) {
-    if (!config.timing) {
-      config.timing = { ...DEFAULT_CONFIG.timing };
-    }
-    config.timing.defaultTimeoutMs = parseInt(process.env.EVOLUTION_TIMEOUT_MS, 10);
+  // Timing overrides
+  const timeoutMs = getInt('EVOLUTION_TIMEOUT_MS', NaN);
+  if (!Number.isNaN(timeoutMs)) {
+    if (!config.timing) config.timing = { ...DEFAULT_CONFIG.timing };
+    config.timing.defaultTimeoutMs = timeoutMs;
   }
   
-  // Check for telemetry wait timeout override
-  if (process.env.TELEMETRY_WAIT_TIMEOUT) {
-    if (!config.timing) {
-      config.timing = { ...DEFAULT_CONFIG.timing };
-    }
-    config.timing.telemetryWaitTimeoutMs = parseInt(process.env.TELEMETRY_WAIT_TIMEOUT, 10);
+  const telemetryWait = getInt('TELEMETRY_WAIT_TIMEOUT', NaN);
+  if (!Number.isNaN(telemetryWait)) {
+    if (!config.timing) config.timing = { ...DEFAULT_CONFIG.timing };
+    config.timing.telemetryWaitTimeoutMs = telemetryWait;
   }
   
-  // Check for agent count override
-  if (process.env.EVOLUTION_AGENT_COUNT) {
-    if (!config.evolution) {
-      config.evolution = { ...DEFAULT_CONFIG.evolution };
-    }
-    config.evolution.defaultAgentCount = parseInt(process.env.EVOLUTION_AGENT_COUNT, 10);
+  // Agent count override
+  const agentCount = getInt('EVOLUTION_AGENT_COUNT', NaN);
+  if (!Number.isNaN(agentCount)) {
+    if (!config.evolution) config.evolution = { ...DEFAULT_CONFIG.evolution };
+    config.evolution.defaultAgentCount = agentCount;
   }
   
   return config;

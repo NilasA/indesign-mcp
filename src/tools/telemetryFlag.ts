@@ -3,6 +3,8 @@
  * Prevents circular import issues in telemetry system
  */
 
+import { ENV } from "../utils/env.js";
+
 /**
  * Internal flag for telemetry enabled state
  */
@@ -20,7 +22,7 @@ export function isTelemetryEnabled(): boolean {
  */
 export function setTelemetryEnabled(enabled: boolean): void {
   telemetryEnabled = enabled;
-  if (process.env.DEBUG_TELEMETRY) {
+  if (ENV.debugTelemetry()) {
     console.log(`📊 Telemetry ${enabled ? 'enabled' : 'disabled'}`);
   }
 }
@@ -30,8 +32,8 @@ export function setTelemetryEnabled(enabled: boolean): void {
  */
 export function initializeTelemetryFromEnv(): void {
   // Check environment variables for initial state
-  const envEnabled = process.env.TELEMETRY_ENABLED === 'true' ||
-                    process.env.EVOLUTION_SESSION_ID !== undefined;
+  const envEnabled = ENV.telemetryEnabled() ||
+                    ENV.evolutionSessionId() !== undefined;
   
   if (envEnabled) {
     setTelemetryEnabled(true);
