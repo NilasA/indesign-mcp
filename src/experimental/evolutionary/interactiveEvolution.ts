@@ -281,11 +281,10 @@ export class InteractiveEvolution {
       this.config!.testCase
     );
     
-    // Save report
-    const reportPath = path.join(
-      '/tmp/evolution_tests/results',
-      `gen${this.currentGeneration}-analysis.md`
-    );
+    // Save report using config resultsDir with cross-platform fallback
+    const resultsDir = this.config?.paths?.resultsDir ?? path.join(os.tmpdir(), 'evolution_tests', 'results');
+    const reportPath = path.join(resultsDir, `gen${this.currentGeneration}-analysis.md`);
+    
     await fs.mkdir(path.dirname(reportPath), { recursive: true });
     await fs.writeFile(reportPath, report, 'utf-8');
     console.log(`📄 Report saved to: ${reportPath}`);

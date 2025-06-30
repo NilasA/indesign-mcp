@@ -69,13 +69,12 @@ export async function runEvolutionTest(options: {
       throw new Error('Cannot proceed - document reset is broken');
     }
     
-    // 4.2. Verify telemetry directory
-    const telemetryDir = path.join(os.tmpdir(), 'evolution_tests', 'telemetry');
+    // 4.2. Verify telemetry directory using TelemetryCapture initialization
     try {
-      await fs.access(telemetryDir, fs.constants.W_OK);
-      console.log('✓ Telemetry directory writable');
-    } catch {
-      console.error('❌ Telemetry directory not writable');
+      await TelemetryCapture.initializeTelemetryDir();
+      console.log('✓ Telemetry directory initialized and writable');
+    } catch (error) {
+      console.error('❌ Telemetry directory initialization failed:', error);
       throw new Error('Cannot proceed - telemetry directory issues');
     }
     
