@@ -53,7 +53,7 @@ export class TelemetryCapture {
   private static config = {
     flushThreshold: getInt('TELEMETRY_FLUSH_THRESHOLD', 10),
     flushIntervalMs: getInt('TELEMETRY_FLUSH_INTERVAL_MS', 200),
-    retryDelays: (getString('TELEMETRY_RETRY_DELAYS', '100,200,500,1000,2000')!).split(',').map(n => parseInt(n, 10))
+    retryDelays: (getString('TELEMETRY_RETRY_DELAYS', '100,200,500,1000,2000') || '100,200,500,1000,2000').split(',').map(n => parseInt(n, 10))
   } as const;
   // Buffer individual JSONL lines before hitting disk
   private static writeBuffer: Map<string, string[]> = new Map();

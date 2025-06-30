@@ -1,11 +1,15 @@
+import { join } from 'path';
+
 export const createTestClient = (server = null) => {
   return {
     // simplistic proxy to server.resources API used in tests
     resources: {
       read: async (uri) => {
         // Leverage mocked executeExtendScript provided by tests
-        const mod = await import(`${process.cwd()}/dist/extendscript.js`);
+        const distPath = join(process.cwd(), 'dist', 'extendscript.js');
+        const mod = await import(distPath);
         const executeExtendScript = mod.executeExtendScript;
+        // Execute empty script to trigger mocked InDesign state inspection
         const exec = await executeExtendScript('');
 
         if (!exec.success) {

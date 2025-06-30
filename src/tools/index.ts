@@ -42,7 +42,7 @@ export function wrapToolForTelemetry<T extends Record<string, any>>(
       
       // Auto-start session if needed and no current session exists
       if (!TelemetryCapture.getCurrentSession()) {
-        const agentId = ENV.telemetryAgentId() as string;
+        const agentId = ENV.telemetryAgentId() ?? 'default-agent';
         const generation = ENV.telemetryGeneration();
         // Fire and forget - don't block the tool execution
         TelemetryCapture.startSession(agentId, generation).catch(error => {
