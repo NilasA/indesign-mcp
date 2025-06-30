@@ -185,7 +185,7 @@ export async function runEvolutionTest(options: {
     );
     
     // 11. Save report
-    const reportPath = `${runner['config'].paths.resultsDir}/gen${generation}-analysis.md`;
+    const reportPath = `${runner.getConfig().paths.resultsDir}/gen${generation}-analysis.md`;
     await fs.writeFile(reportPath, report, 'utf-8');
     console.log(`\n📄 Analysis report saved: ${reportPath}`);
     

@@ -73,8 +73,13 @@ npm run lint:fix    # Auto-fix ESLint issues
 npm run build && npm start    # Validate compilation and server startup
 
 # Evolutionary Testing (Task-based)
-npx tsx src/experimental/evolutionary/runEvolutionTest.ts  # Run the test orchestrator
-# Actual testing is done interactively using Claude Code's Task tool
+npm run evol-repl    # Start interactive evolution REPL (recommended)
+npx tsx src/experimental/evolutionary/runEvolutionTest.ts  # Direct test orchestrator
+
+# Debug flags for evolutionary testing
+DEBUG_EVOLUTION=true npm run evol-repl      # Evolution workflow details
+DEBUG_TELEMETRY=true npm run evol-repl      # Telemetry system debugging  
+DEBUG_ALL=true npm run evol-repl            # Complete verbose output
 ```
 
 ## 📋 Git Workflow
@@ -265,6 +270,26 @@ The evolutionary testing system automatically improves MCP tool descriptions bas
 - **Cost**: Zero API costs - uses Task tool only
 - **O3 Fixes**: ✅ All critical issues resolved (config fallback, document safety, telemetry robustness)
 - **Telemetry Architecture**: ✅ Fixed dynamic enable/disable capability with always-wrapped tools
+
+### Debug Flags
+The evolutionary testing system supports granular debug logging:
+
+```bash
+DEBUG_EVOLUTION=true     # Evolution orchestration details (recommended for troubleshooting)
+DEBUG_TELEMETRY=true     # Telemetry system debugging (capture, sessions, health)
+DEBUG_PATTERNS=true      # Pattern analysis details (frequency, confidence, examples)
+DEBUG_AGENT=true         # Agent execution details (prompts, responses, timing)
+DEBUG_TESTING=true       # Test execution output (validation, scoring, metrics)
+DEBUG_VALIDATION=true    # Validation warnings (config issues, missing files)
+DEBUG_EXAMPLES=true      # Example workflow output (demo scripts, tutorials)
+DEBUG_ALL=true           # Enable all debug categories
+```
+
+**Usage Examples:**
+- Basic troubleshooting: `DEBUG_EVOLUTION=true npm run evol-repl`
+- Telemetry issues: `DEBUG_TELEMETRY=true DEBUG_EVOLUTION=true npm run evol-repl`
+- Full debugging: `DEBUG_ALL=true npm run evol-repl`
+- Clean output: `npm run evol-repl` (default - minimal output)
 
 ### Quick Start Guides
 For running the evolutionary testing system:

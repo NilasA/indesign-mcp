@@ -86,7 +86,7 @@ State Management:
 
 Debug:
   evo.generateChecklist()              - Show current checklist
-  process.exit()                       - Exit REPL
+  exit                                 - Exit REPL (or Ctrl+C)
 `);
 };
 

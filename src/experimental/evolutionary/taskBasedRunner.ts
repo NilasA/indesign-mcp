@@ -34,6 +34,13 @@ export class TaskBasedRunner {
   }
   
   /**
+   * Get the evolution test configuration
+   */
+  getConfig(): EvolutionTestConfig {
+    return this.config;
+  }
+  
+  /**
    * Initialize the runner
    */
   async initialize(): Promise<void> {
