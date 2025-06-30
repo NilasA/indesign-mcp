@@ -33,17 +33,19 @@ npm start
 
 ### Server Startup with Telemetry (for Evolutionary Testing)
 
-For telemetry-enabled server (required for evolutionary testing):
+Need telemetry for evolutionary tests? Run the server with the handy alias **or** the raw command:
 
 ```bash
-# Option 1: Using npm script (recommended)
+# Preferred – uses the alias added in package.json
 npm run start:telemetry &
 
-# Option 2: Manual environment variables
+# Equivalent manual invocation
 TELEMETRY_ENABLED=true EVOLUTION_SESSION_ID=$(date +%s) npm start &
 ```
 
-This enables telemetry capture from the server startup, ensuring all tool calls are properly tracked during testing.
+The ampersand backgrounds the process; when you are done stop it with `kill %1` (or just press Ctrl-C if you ran it in the foreground).
+
+With telemetry enabled from launch every tool call is logged to `${os.tmpdir()}/evolution_tests/telemetry/<session>.jsonl`, so Task agents no longer need to fiddle with environment variables before the server starts.
 
 ## Usage
 

@@ -90,36 +90,43 @@ await evolution.loadProgress('generation1.json');
 console.log(await evolution.getProgress());
 ```
 
-### 2. Run Evolution Test with Direct Execution
+### 2. Run Evolution Test with REPL Interface
 
-Instead of running a blocking bash script, Claude Code uses direct module imports for full control over the testing process.
+Instead of multiple short-lived `node -e` commands that lose state, use the persistent REPL interface:
+
+#### Start the Evolution REPL
+```bash
+npm run evol-repl
+```
+
+This creates a single, long-lived Node process with the `InteractiveEvolution` instance available as `evo`.
 
 #### Initialize the Evolution System
-```typescript
-import { InteractiveEvolution } from './dist/experimental/evolutionary/interactiveEvolution.js';
-
-const evolution = new InteractiveEvolution();
-await evolution.initialize('book-page', 3); // 3 agents per generation
+```javascript
+await evo.initialize('book-page', 3); // 3 agents per generation
 ```
 
 #### Start a Generation
-```typescript
-await evolution.startGeneration();
-console.log(await evolution.getProgress());
+```javascript
+await evo.startGeneration();
+console.log(await evo.getProgress());
 ```
 
 #### Run Task Agents
 For each agent in the generation:
-```typescript
+```javascript
 // Get the next agent prompt
-const { prompt, sessionId, agentId, isLastAgent } = await evolution.getNextAgentPrompt();
+const { prompt, sessionId, agentId, isLastAgent } = await evo.getNextAgentPrompt();
 console.log(`Running ${agentId}...`);
 
-// Use the Task tool with the prompt
-Task("Recreate InDesign layout", prompt);
+// Copy the prompt and run it with the Task tool in Claude Code
+console.log("═".repeat(50));
+console.log("TASK PROMPT:");
+console.log(prompt);
+console.log("═".repeat(50));
 
 // After the Task agent completes (3-4 minutes), process the results
-const result = await evolution.processAgentCompletion(sessionId);
+const result = await evo.processAgentCompletion(sessionId);
 console.log(`Score: ${result.score}%`);
 
 // Continue with next agent unless this was the last one
@@ -130,8 +137,8 @@ if (!isLastAgent) {
 
 #### Analyze Generation Results
 After all agents complete:
-```typescript
-const { patterns, report, averageScore } = await evolution.analyzeGeneration();
+```javascript
+const { patterns, report, averageScore } = await evo.analyzeGeneration();
 console.log(`Average score: ${averageScore}%`);
 console.log(`Patterns found: ${patterns.length}`);
 
@@ -140,59 +147,58 @@ console.log(report);
 ```
 
 #### Generate and Apply Improvements
-```typescript
+```javascript
 // Get improvement suggestions
-const improvements = await evolution.suggestImprovements();
+const improvements = await evo.suggestImprovements();
 
 // Select and apply an improvement (Claude Code decides which one)
 const selectedImprovement = improvements[0]; // Example: first suggestion
-await evolution.applyImprovement(selectedImprovement);
+await evo.applyImprovement(selectedImprovement);
 
 // Commit the change using git
 // git add -A && git commit -m "Improve font_size description based on evolution testing"
 ```
 
 #### Continue to Next Generation
-```typescript
+```javascript
 // Move to next generation
-await evolution.nextGeneration();
+await evo.nextGeneration();
 
 // Start the new generation
-await evolution.startGeneration();
+await evo.startGeneration();
 // ... repeat the agent process
 ```
 
 ## Complete Example Session
 
-Here's a full example of running one generation:
+Here's a full example of running one generation using the REPL:
 
-```typescript
-// 1. Initialize
-import { InteractiveEvolution } from './dist/experimental/evolutionary/interactiveEvolution.js';
-const evolution = new InteractiveEvolution();
-await evolution.initialize('book-page', 3);
+```bash
+# 1. Start REPL
+npm run evol-repl
 
-// 2. Start Generation 1
-await evolution.startGeneration();
+# 2. In the REPL:
+await evo.initialize('book-page', 3)
+await evo.startGeneration()
 
-// 3. Run 3 agents
+# 3. Run 3 agents
 for (let i = 0; i < 3; i++) {
-  const { prompt, sessionId, agentId } = await evolution.getNextAgentPrompt();
+  const { prompt, sessionId, agentId } = await evo.getNextAgentPrompt();
   console.log(`Running ${agentId}...`);
+  console.log("PROMPT FOR TASK TOOL:");
+  console.log(prompt);
   
-  // Use Task tool
-  Task("Recreate InDesign layout", prompt);
-  
-  // Process results after Task completes
-  const result = await evolution.processAgentCompletion(sessionId);
+  // Copy prompt to Task tool in Claude Code, wait for completion
+  // Then process results:
+  const result = await evo.processAgentCompletion(sessionId);
   console.log(`${agentId} score: ${result.score}%`);
 }
 
-// 4. Analyze patterns
-const { patterns, report, averageScore } = await evolution.analyzeGeneration();
+# 4. Analyze patterns
+const { patterns, report, averageScore } = await evo.analyzeGeneration();
 console.log(`Generation 1 average: ${averageScore}%`);
 
-// 5. Apply improvements and continue...
+# 5. Apply improvements and continue...
 ```
 
 ## State Management
@@ -214,9 +220,9 @@ console.log(await evolution.getProgress());
 const { prompt, sessionId } = await evolution.getNextAgentPrompt();
 ```
 
-## Why Direct Execution?
+## Why REPL Interface?
 
-The previous approach using `npx tsx runEvolutionTest.ts` created a blocking process that prevented Claude Code from executing Task agents. Direct execution gives Claude Code full control over timing and execution flow.
+The previous approach using multiple `node -e` commands created separate processes that lost the `InteractiveEvolution` state between operations. The REPL interface maintains a single, persistent Node process with the evolution instance in memory, solving the "Evolution system not initialized" errors.
 
 ## Important Notes
 

@@ -17,5 +17,5 @@ echo "  TELEMETRY_ENABLED=${TELEMETRY_ENABLED}"
 echo "  EVOLUTION_SESSION_ID=${EVOLUTION_SESSION_ID}"
 echo "  RUN_INDESIGN_TESTS=${RUN_INDESIGN_TESTS}"
 
-# Run the server with telemetry enabled
-npm start
+# Run the server with telemetry enabled via convenience script
+npm run start:telemetry
