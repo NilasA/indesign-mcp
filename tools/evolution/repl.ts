@@ -16,7 +16,7 @@
  *   > await evo.processAgentCompletion(prompt.sessionId)
  */
 
-import { InteractiveEvolution } from '../../src/experimental/evolutionary/interactiveEvolution.js';
+import { InteractiveEvolution } from '../../src/experimental/evolutionary/interactiveEvolution.ts';
 import * as readline from 'readline';
 
 // Create evolution instance and make it globally available

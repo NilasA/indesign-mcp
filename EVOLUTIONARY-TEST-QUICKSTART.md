@@ -177,6 +177,8 @@ Here's a full example of running one generation using the REPL:
 # 1. Start REPL
 npm run evol-repl
 
+# (If this is a fresh clone run `npm run build` once first so TypeScript paths resolve)
+
 # 2. In the REPL:
 await evo.initialize('book-page', 3)
 await evo.startGeneration()
