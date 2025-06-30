@@ -111,6 +111,40 @@ See `example-task-workflow.ts` for a complete example of how Claude Code would o
 3. **Interactive**: Semi-automated with Claude Code driving
 4. **Free**: No external API costs
 
+## Debug Logging
+
+The evolutionary testing system includes comprehensive debug logging controlled by environment variables:
+
+### Debug Categories
+```bash
+DEBUG_EVOLUTION=true     # Evolution orchestration (recommended)
+DEBUG_TELEMETRY=true     # Telemetry system details
+DEBUG_PATTERNS=true      # Pattern analysis details
+DEBUG_AGENT=true         # Agent execution details
+DEBUG_TESTING=true       # Test execution details
+DEBUG_VALIDATION=true    # Validation warnings
+DEBUG_EXAMPLES=true      # Example workflow output
+DEBUG_ALL=true           # Enable all debug output
+```
+
+### Usage Examples
+```bash
+# Basic evolution debugging
+DEBUG_EVOLUTION=true npm run evol-repl
+
+# Full debug output
+DEBUG_ALL=true npm run evol-repl
+
+# Telemetry troubleshooting
+DEBUG_TELEMETRY=true DEBUG_EVOLUTION=true npm run evol-repl
+```
+
+### Debug Output Control
+- **Default**: Only critical progress messages shown
+- **With DEBUG_EVOLUTION**: Detailed workflow steps
+- **With DEBUG_ALL**: Complete verbose output
+- **Without debug flags**: Clean, minimal output
+
 ## Tips for Success
 
 1. Run agents sequentially (InDesign constraint)
@@ -118,3 +152,5 @@ See `example-task-workflow.ts` for a complete example of how Claude Code would o
 3. Focus on high-impact patterns
 4. Test improvements before committing
 5. Document rationale for each change
+6. Use `DEBUG_EVOLUTION=true` for troubleshooting
+7. Check telemetry health before running agents

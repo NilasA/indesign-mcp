@@ -39,8 +39,22 @@ import { TestConfig, TestRun, Improvement } from './types.js';
  * Use this as a reference for the workflow, not as executable code.
  */
 export async function exampleEvolutionWorkflow() {
-  console.log('=== Task-Based Evolutionary Testing Example ===\n');
+  // Debug logging configuration for examples
+  const DEBUG_EXAMPLES = process.env.DEBUG_EXAMPLES === 'true';
+  const DEBUG_ALL = process.env.DEBUG_ALL === 'true';
+  const debugLog = (message: string) => {
+    if (DEBUG_EXAMPLES || DEBUG_ALL) {
+      console.log(`📚 ${message}`);
+    }
+  };
+
+  debugLog('=== Task-Based Evolutionary Testing Example ===\n');
   
+  if (!DEBUG_EXAMPLES && !DEBUG_ALL) {
+    console.log('ℹ️  Example workflow (set DEBUG_EXAMPLES=true for details)');
+    return;
+  }
+
   // Initialize components
   const runner = createTaskBasedRunner();
   const patternAnalyzer = new PatternAnalyzer();
@@ -49,7 +63,9 @@ export async function exampleEvolutionWorkflow() {
   const improvementManager = new ImprovementManager();
   const gitManager = new GitManager();
   
+  debugLog('Initializing runner with telemetry...');
   await runner.initialize();
+  debugLog('✓ Runner ready with telemetry enabled\n');
   
   // Configuration
   const config: TestConfig = {
@@ -76,7 +92,7 @@ export async function exampleEvolutionWorkflow() {
   };
   
   // === GENERATION 1 ===
-  console.log('\n=== Generation 1: Initial Baseline ===\n');
+  debugLog('\n=== Generation 1: Initial Baseline ===\n');
   
   await runner.prepareGeneration(1);
   
@@ -90,11 +106,11 @@ export async function exampleEvolutionWorkflow() {
     const sessionId = runner.generateSessionId(agentId, config.generation);
     const prompt = runner.createTaskPrompt(config, agentId, sessionId);
     
-    console.log(`\n--- Launching ${agentId} ---`);
-    console.log('Claude Code would now use Task tool with this minimal prompt:');
-    console.log('```');
-    console.log(prompt);
-    console.log('```');
+    debugLog(`\n--- Launching ${agentId} ---`);
+    debugLog('Claude Code would now use Task tool with this minimal prompt:');
+    debugLog('```');
+    debugLog(prompt);
+    debugLog('```');
     
     // ACTUAL CLAUDE CODE WORKFLOW:
     // 1. Claude Code invokes: Task("Recreate InDesign layout", prompt)
@@ -102,9 +118,9 @@ export async function exampleEvolutionWorkflow() {
     // 3. Task agent has full access to InDesign MCP tools
     // 4. When Task completes, Claude Code continues here
     
-    console.log('\n[Claude Code would invoke Task tool here]');
-    console.log('[Waiting for Task agent to complete layout recreation...]');
-    console.log('[Task completed - document has been modified]');
+    debugLog('\n[Claude Code would invoke Task tool here]');
+    debugLog('[Waiting for Task agent to complete layout recreation...]');
+    debugLog('[Task completed - document has been modified]');
     
     // After Task completes, collect metrics (not telemetry)
     const telemetry = await runner.collectTaskTelemetry(agentId, sessionId);

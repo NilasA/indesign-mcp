@@ -19,6 +19,15 @@ import { TestConfig, TestRun, GenerationResult, Improvement, Pattern } from './t
 import { EvolutionTestConfig, getConfig } from './config.js';
 import { TelemetryCapture } from '../../tools/telemetry.js';
 
+// Debug logging configuration
+const DEBUG_EVOLUTION = process.env.DEBUG_EVOLUTION === 'true';
+const DEBUG_ALL = process.env.DEBUG_ALL === 'true';
+const debugLog = (message: string) => {
+  if (DEBUG_EVOLUTION || DEBUG_ALL) {
+    console.log(message);
+  }
+};
+
 /**
  * State that can be persisted between sessions
  */
@@ -86,7 +95,7 @@ export class InteractiveEvolution {
     await this.runner.initialize();
     
     // Load reference data
-    console.log(`Loading reference data for test case: ${testCase}`);
+    debugLog(`Loading reference data for test case: ${testCase}`);
     const referenceMetrics = await loadReferenceMetrics(testCase);
     const referenceImage = await getReferenceImagePath(testCase);
     
@@ -107,9 +116,9 @@ export class InteractiveEvolution {
     await TelemetryCapture.cleanupOldTelemetry(7 * 24 * 60 * 60 * 1000); // 7 days
     
     console.log('✅ Evolution system initialized');
-    console.log(`📄 Test case: ${testCase}`);
-    console.log(`🎯 Target score: ${this.config.targetScore}%`);
-    console.log(`👥 Agents per generation: ${agentCount}\n`);
+    debugLog(`📄 Test case: ${testCase}`);
+    debugLog(`🎯 Target score: ${this.config.targetScore}%`);
+    debugLog(`👥 Agents per generation: ${agentCount}\n`);
   }
   
   /**
@@ -131,18 +140,18 @@ export class InteractiveEvolution {
     await this.runner.prepareGeneration(this.currentGeneration);
     
     // Pre-flight checks
-    console.log('\n🔍 Running pre-flight checks...');
+    debugLog('\n🔍 Running pre-flight checks...');
     
     try {
       // Verify document can be reset
       await this.runner.resetInDesignState();
-      console.log('✓ Document reset working');
+      debugLog('✓ Document reset working');
       
       // Verify reference image exists
       await fs.access(this.config.referenceImage, fs.constants.R_OK);
-      console.log('✓ Reference image found');
+      debugLog('✓ Reference image found');
       
-      console.log('✓ All pre-flight checks passed\n');
+      debugLog('✓ All pre-flight checks passed\n');
     } catch (error) {
       console.error('❌ Pre-flight check failed:', error);
       throw error;
@@ -262,7 +271,7 @@ export class InteractiveEvolution {
       throw new Error('No runs to analyze. Complete some agents first.');
     }
     
-    console.log('\n🔬 Analyzing Generation Results...');
+    debugLog('\n🔬 Analyzing Generation Results...');
     
     // Collect generation results
     const generationResult = await this.runner.collectGenerationResults(this.runs);
@@ -271,12 +280,12 @@ export class InteractiveEvolution {
     this.runner.displayGenerationSummary(generationResult);
     
     // Analyze patterns
-    console.log('\n🔍 Detecting Patterns...');
+    debugLog('\n🔍 Detecting Patterns...');
     const patterns = this.patternAnalyzer.analyzePatterns(this.runs);
-    console.log(`Found ${patterns.length} patterns`);
+    debugLog(`Found ${patterns.length} patterns`);
     
     // Generate analysis report
-    console.log('\n📝 Generating Analysis Report...');
+    debugLog('\n📝 Generating Analysis Report...');
     const report = await this.claudeAnalyzer.formatPatternAnalysis(
       this.runs,
       patterns,
@@ -309,7 +318,7 @@ export class InteractiveEvolution {
       throw new Error('No runs to analyze. Complete a generation first.');
     }
     
-    console.log('\n💡 Generating Improvement Suggestions...\n');
+    debugLog('\n💡 Generating Improvement Suggestions...\n');
     
     // This is where Claude Code would analyze the patterns and suggest improvements
     // For now, we'll return an example structure
@@ -326,13 +335,13 @@ export class InteractiveEvolution {
       }
     ];
     
-    console.log('📋 Suggested improvements:');
+    debugLog('📋 Suggested improvements:');
     exampleImprovements.forEach((imp, i) => {
-      console.log(`\n${i + 1}. ${imp.tool} - ${imp.field}`);
-      console.log(`   Current: "${imp.current}"`);
-      console.log(`   Proposed: "${imp.proposed}"`);
-      console.log(`   Rationale: ${imp.rationale}`);
-      console.log(`   Expected Impact: ${(imp.expectedImpact * 100).toFixed(0)}%`);
+      debugLog(`\n${i + 1}. ${imp.tool} - ${imp.field}`);
+      debugLog(`   Current: "${imp.current}"`);
+      debugLog(`   Proposed: "${imp.proposed}"`);
+      debugLog(`   Rationale: ${imp.rationale}`);
+      debugLog(`   Expected Impact: ${(imp.expectedImpact * 100).toFixed(0)}%`);
     });
     
     return exampleImprovements;
@@ -342,7 +351,7 @@ export class InteractiveEvolution {
    * Apply an improvement
    */
   async applyImprovement(improvement: Improvement): Promise<void> {
-    console.log(`\n🔧 Applying improvement to ${improvement.tool}...`);
+    debugLog(`\n🔧 Applying improvement to ${improvement.tool}...`);
     
     try {
       await this.toolModifier.applyImprovement(improvement);
@@ -350,8 +359,8 @@ export class InteractiveEvolution {
       console.log('✅ Improvement applied successfully');
       
       // Optionally commit
-      console.log('\n💾 Ready to commit this improvement');
-      console.log('Use git commands to commit the change with appropriate message');
+      debugLog('\n💾 Ready to commit this improvement');
+      debugLog('Use git commands to commit the change with appropriate message');
       
     } catch (error) {
       console.error('❌ Failed to apply improvement:', error);
@@ -364,7 +373,7 @@ export class InteractiveEvolution {
    */
   async nextGeneration(): Promise<void> {
     this.currentGeneration++;
-    console.log(`\n📈 Advancing to Generation ${this.currentGeneration}`);
+    debugLog(`\n📈 Advancing to Generation ${this.currentGeneration}`);
   }
   
   /**
@@ -411,7 +420,7 @@ export class InteractiveEvolution {
     await fs.mkdir(path.dirname(filepath), { recursive: true });
     await fs.writeFile(filepath, JSON.stringify(state, null, 2), 'utf-8');
     
-    console.log(`\n💾 Progress saved to: ${filepath}`);
+    debugLog(`\n💾 Progress saved to: ${filepath}`);
   }
   
   /**
@@ -437,8 +446,8 @@ export class InteractiveEvolution {
       // Re-initialize components
       await this.runner.initialize();
       
-      console.log(`\n📂 Progress loaded from: ${filepath}`);
-      console.log(await this.getProgress());
+      debugLog(`\n📂 Progress loaded from: ${filepath}`);
+      debugLog(await this.getProgress());
       
     } catch (error) {
       console.error('❌ Failed to load progress:', error);
