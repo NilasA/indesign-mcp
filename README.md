@@ -31,6 +31,20 @@ npm run build
 npm start
 ```
 
+### Server Startup with Telemetry (for Evolutionary Testing)
+
+For telemetry-enabled server (required for evolutionary testing):
+
+```bash
+# Option 1: Using npm script (recommended)
+npm run start:telemetry &
+
+# Option 2: Manual environment variables
+TELEMETRY_ENABLED=true EVOLUTION_SESSION_ID=$(date +%s) npm start &
+```
+
+This enables telemetry capture from the server startup, ensuring all tool calls are properly tracked during testing.
+
 ## Usage
 
 Add to your MCP client configuration:

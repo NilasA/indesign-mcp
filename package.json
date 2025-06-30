@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "start": "tsx src/index.ts",
+    "start:telemetry": "TELEMETRY_ENABLED=true EVOLUTION_SESSION_ID=$(date +%s) tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
     "lint": "eslint \"src/**/*.ts\" \"tests/**/*.ts\" --ignore-pattern \"src/guidance/**\" --ignore-pattern \"src/intelligence/**\"",
