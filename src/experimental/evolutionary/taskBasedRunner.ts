@@ -164,10 +164,25 @@ export class TaskBasedRunner {
       console.log(`Creating prompt for ${agentId} (Gen ${config.generation}, Session: ${sessionId})`);
     }
     
-    // Make session ID prominent
-    let prompt = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    // CRITICAL: Telemetry setup MUST be first - agents ignore instructions buried in text
+    let prompt = `🚨 CRITICAL SETUP - COPY THESE COMMANDS EXACTLY 🚨\n`;
+    prompt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    prompt += `❗ YOUR SCORE WILL BE 0% IF YOU SKIP THESE TOOL CALLS ❗\n`;
+    prompt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    
+    prompt += `STEP 1: Before ANY other tool calls, run this EXACT command:\n`;
+    prompt += '```\n';
+    prompt += 'set_environment_variable {name: "TELEMETRY_ENABLED", value: "true"}\n';
+    prompt += '```\n\n';
+    
+    prompt += `STEP 2: After you finish your layout work, run this EXACT command:\n`;
+    prompt += '```\n';
+    prompt += 'telemetry_end_session\n';
+    prompt += '```\n\n';
+    
+    prompt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
     prompt += `SESSION ID: ${sessionId}\n`;
-    prompt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    prompt += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     
     prompt += 'CONTEXT: The InDesign document has been cleared and is ready for your layout.\n\n';
     
@@ -183,29 +198,24 @@ export class TaskBasedRunner {
       prompt += 'Reference: A typical academic book page with a heading and body text.\n\n';
     }
     
-    // Make telemetry instruction unmissable
-    prompt += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-    prompt += '⚠️  CRITICAL SETUP: Before any layout work, call this tool:\n';
-    prompt += '   set_environment_variable {name: "TELEMETRY_ENABLED", value: "true"}\n';
-    prompt += '   Then when you complete the layout, you MUST call:\n';
-    prompt += '   telemetry_end_session\n';
-    prompt += 'This enables telemetry capture and saves your work!\n';
-    prompt += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-    
-    // Prompt self-check validation (O3's suggestion)
+    // Prompt self-check validation (O3's suggestion) - enhanced for new format
     const hasSetEnvVar = prompt.includes('set_environment_variable');
     const hasTelemetryEnd = prompt.includes('telemetry_end_session');
     const hasSessionId = prompt.includes(sessionId);
+    const hasTripleBackticks = prompt.includes('```');
+    const hasScoreWarning = prompt.includes('YOUR SCORE WILL BE 0%');
     
     if (process.env.DEBUG_TELEMETRY) {
-      console.log(`📋 Prompt validation for ${agentId}:`);
+      console.log(`📋 Enhanced prompt validation for ${agentId}:`);
       console.log(`   ✓ Contains set_environment_variable: ${hasSetEnvVar}`);
       console.log(`   ✓ Contains telemetry_end_session: ${hasTelemetryEnd}`);
       console.log(`   ✓ Contains session ID: ${hasSessionId}`);
+      console.log(`   ✓ Contains triple backticks: ${hasTripleBackticks}`);
+      console.log(`   ✓ Contains score warning: ${hasScoreWarning}`);
     }
     
-    if (!hasSetEnvVar || !hasTelemetryEnd) {
-      console.warn(`⚠️  PROMPT VALIDATION FAILED: Missing critical telemetry instructions!`);
+    if (!hasSetEnvVar || !hasTelemetryEnd || !hasTripleBackticks || !hasScoreWarning) {
+      console.warn(`⚠️  PROMPT VALIDATION FAILED: Missing critical telemetry instructions or formatting!`);
     }
     
     return prompt;
