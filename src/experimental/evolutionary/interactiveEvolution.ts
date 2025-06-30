@@ -16,6 +16,7 @@ import { ToolModifier } from './toolModifier.js';
 import { GitManager } from './gitManager.js';
 import { loadReferenceMetrics, getReferenceImagePath } from './metricsLoader.js';
 import { TestConfig, TestRun, GenerationResult, Improvement, Pattern } from './types.js';
+import { EvolutionTestConfig, getConfig } from './config.js';
 import { TelemetryCapture } from '../../tools/telemetry.js';
 
 /**
@@ -62,6 +63,7 @@ export class InteractiveEvolution {
   private currentAgentIndex: number = 0;
   private runs: TestRun[] = [];
   private config: TestConfig | null = null;
+  private evolutionConfig: EvolutionTestConfig;
   private startTime: number = Date.now();
   private improvements: Improvement[] = [];
   
@@ -71,6 +73,7 @@ export class InteractiveEvolution {
     this.claudeAnalyzer = new ClaudeAnalyzer();
     this.toolModifier = new ToolModifier();
     this.gitManager = new GitManager();
+    this.evolutionConfig = getConfig(); // Initialize with default config
   }
   
   /**
@@ -281,8 +284,8 @@ export class InteractiveEvolution {
       this.config!.testCase
     );
     
-    // Save report using config resultsDir with cross-platform fallback
-    const resultsDir = this.config?.paths?.resultsDir ?? path.join(os.tmpdir(), 'evolution_tests', 'results');
+    // Save report using evolutionConfig resultsDir with cross-platform fallback
+    const resultsDir = this.evolutionConfig.paths.resultsDir;
     const reportPath = path.join(resultsDir, `gen${this.currentGeneration}-analysis.md`);
     
     await fs.mkdir(path.dirname(reportPath), { recursive: true });
@@ -401,8 +404,8 @@ export class InteractiveEvolution {
       currentAgentIndex: this.currentAgentIndex
     };
     
-    // Use config progressDir with fallback to prevent "path argument must be string" error
-    const progressDir = this.config?.paths?.progressDir ?? path.join(os.tmpdir(), 'evolution_progress');
+    // Use evolutionConfig progressDir to prevent "path argument must be string" error
+    const progressDir = this.evolutionConfig.paths.progressDir;
     const filepath = path.join(progressDir, filename);
     
     await fs.mkdir(path.dirname(filepath), { recursive: true });
@@ -415,8 +418,8 @@ export class InteractiveEvolution {
    * Load progress from file
    */
   async loadProgress(filename: string): Promise<void> {
-    // Use config progressDir with fallback to prevent "path argument must be string" error
-    const progressDir = this.config?.paths?.progressDir ?? path.join(os.tmpdir(), 'evolution_progress');
+    // Use evolutionConfig progressDir to prevent "path argument must be string" error
+    const progressDir = this.evolutionConfig.paths.progressDir;
     const filepath = path.join(progressDir, filename);
     
     try {

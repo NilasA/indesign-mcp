@@ -30,8 +30,8 @@ describe('ProgressDir Path Validation Fix', () => {
     // Test the scenario that was causing the original error
     const testFilename = 'test-progress.json';
     
-    // Create a minimal valid progress file
-    const progressDir = path.join(os.tmpdir(), 'evolution_progress');
+    // Create a minimal valid progress file in the correct config location
+    const progressDir = path.join(os.tmpdir(), 'evolution_tests', 'progress');
     await fs.mkdir(progressDir, { recursive: true });
     
     const testProgress = {
@@ -65,9 +65,9 @@ describe('ProgressDir Path Validation Fix', () => {
     // This should not throw any path-related errors
     await expect(evolution.saveProgress(testFilename)).resolves.not.toThrow();
     
-    // Verify file was created in fallback location
-    const fallbackDir = path.join(os.tmpdir(), 'evolution_progress');
-    const expectedFile = path.join(fallbackDir, testFilename);
+    // Verify file was created in evolution config location
+    const expectedDir = path.join(os.tmpdir(), 'evolution_tests', 'progress');
+    const expectedFile = path.join(expectedDir, testFilename);
     
     const fileExists = await fs.access(expectedFile).then(() => true).catch(() => false);
     expect(fileExists).toBe(true);
