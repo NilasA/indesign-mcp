@@ -402,7 +402,10 @@ export class InteractiveEvolution {
       currentAgentIndex: this.currentAgentIndex
     };
     
-    const filepath = path.join(path.join(os.tmpdir(), 'evolution_tests'), filename);
+    // Use config progressDir with fallback to prevent "path argument must be string" error
+    const progressDir = this.config?.paths?.progressDir ?? path.join(os.tmpdir(), 'evolution_progress');
+    const filepath = path.join(progressDir, filename);
+    
     await fs.mkdir(path.dirname(filepath), { recursive: true });
     await fs.writeFile(filepath, JSON.stringify(state, null, 2), 'utf-8');
     
@@ -413,7 +416,9 @@ export class InteractiveEvolution {
    * Load progress from file
    */
   async loadProgress(filename: string): Promise<void> {
-    const filepath = path.join(path.join(os.tmpdir(), 'evolution_tests'), filename);
+    // Use config progressDir with fallback to prevent "path argument must be string" error
+    const progressDir = this.config?.paths?.progressDir ?? path.join(os.tmpdir(), 'evolution_progress');
+    const filepath = path.join(progressDir, filename);
     
     try {
       const data = await fs.readFile(filepath, 'utf-8');

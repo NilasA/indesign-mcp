@@ -16,6 +16,7 @@ export interface EvolutionTestConfig {
     telemetryDir: string;
     documentsDir: string;
     resultsDir: string;
+    progressDir: string;
   };
   
   // Timing configuration
@@ -63,7 +64,8 @@ export const DEFAULT_CONFIG: EvolutionTestConfig = {
     baseDir: path.join(os.tmpdir(), 'evolution_tests'),
     telemetryDir: path.join(os.tmpdir(), 'evolution_tests', 'telemetry'),
     documentsDir: path.join(os.tmpdir(), 'evolution_tests', 'documents'),
-    resultsDir: path.join(os.tmpdir(), 'evolution_tests', 'results')
+    resultsDir: path.join(os.tmpdir(), 'evolution_tests', 'results'),
+    progressDir: path.join(os.tmpdir(), 'evolution_tests', 'progress')
   },
   
   timing: {
@@ -129,7 +131,8 @@ export function loadConfigFromEnv(): Partial<EvolutionTestConfig> {
       baseDir,
       telemetryDir: path.join(baseDir, 'telemetry'),
       documentsDir: path.join(baseDir, 'documents'),
-      resultsDir: path.join(baseDir, 'results')
+      resultsDir: path.join(baseDir, 'results'),
+      progressDir: path.join(baseDir, 'progress')
     };
   }
   
