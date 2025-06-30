@@ -33,13 +33,10 @@ npm start
 
 ### **Solution**: Set longer timeouts
 ```bash
-# Option 1: Set timeout for specific commands (RECOMMENDED)
-timeout 7m node -e "your evolution command here"
+# Use gtimeout for proper timeout handling on macOS
+gtimeout 7m node -e "your evolution command here"
 
-# Option 2: Increase your shell's default timeout if possible
-# (depends on your Claude Code configuration)
-
-# Option 3: Use the provided script with built-in timeout handling
+# Alternative: Use the provided script with built-in timeout handling
 chmod +x run-evolution-test.sh && ./run-evolution-test.sh
 ```
 
