@@ -56,6 +56,22 @@ indesign-mcp/                    # Main TypeScript MCP project
 └── package.json                 # Dependencies & scripts
 ```
 
+## ⚠️ IMPORTANT: ES Module Project
+
+This project uses ES modules (`"type": "module"` in package.json). 
+
+**✅ CORRECT Command Patterns:**
+- `npm run evol-repl` (recommended for evolution testing)
+- `npx tsx src/experimental/evolutionary/runEvolutionTest.ts`
+- `npm run build && npm start`
+
+**❌ INCORRECT - DO NOT USE:**
+- `node -e "const x = require('./dist/...)"` (CommonJS require fails)
+- `require('./dist/src/experimental/...)` (wrong path + CommonJS)
+- Direct `node` execution of dist files without import()
+
+**Common Error**: If you see `Cannot find module './dist/src/...'`, you're using CommonJS syntax on ES modules.
+
 ## Development Commands
 
 ```bash

@@ -1,5 +1,25 @@
 # Evolutionary Testing Quick Start Guide for Claude Code
 
+## ⚠️ CRITICAL: ES Module Project
+
+**This project uses ES modules.** Common execution mistakes will cause failures.
+
+**✅ CORRECT Command Patterns:**
+```bash
+npm run evol-repl                                    # Recommended
+npx tsx src/experimental/evolutionary/runEvolutionTest.ts
+timeout 7m npx tsx src/experimental/evolutionary/runEvolutionTest.ts
+```
+
+**❌ WRONG - DO NOT USE:**
+```bash
+node -e "const x = require('./dist/...)"           # ❌ CommonJS require fails
+timeout 7m node -e "require('./dist/src/..."       # ❌ Wrong path + CommonJS  
+```
+
+**Error Pattern**: `Cannot find module './dist/src/experimental/evolutionary/...'`
+**Solution**: Use `npx tsx` with source files, not `node -e` with dist files.
+
 ## Overview
 This guide provides step-by-step instructions for running the evolutionary testing system to improve InDesign MCP tool descriptions based on empirical LLM behavior.
 

@@ -1,13 +1,16 @@
 # Evolutionary Testing Checklist
 
+## ⚠️ ES Module Warning
+**Use `npx tsx` or `npm run evol-repl` - NOT `node -e` with `require()`**
+
 ## Pre-Flight Check
 - [ ] InDesign is running with a document open
 - [ ] MCP server built: `npm run build`
 - [ ] MCP server running: `npm start` (in separate terminal, telemetry OFF by default)
 - [ ] Reference images exist in `tests/decision-analysis/reference-images/`
 - [ ] You are Claude Code (can use Task tool)
-- [ ] **CRITICAL**: Timeout configured for 7+ minutes: `timeout 7m node -e "..."`
-- [ ] **CRITICAL**: Using single evolution instance (no multiple `node -e` processes)
+- [ ] **CRITICAL**: Use correct command: `timeout 7m npx tsx src/experimental/evolutionary/runEvolutionTest.ts`
+- [ ] **CRITICAL**: Using single evolution instance (no multiple processes)
 - [ ] Environment variables clear: no competing EVOLUTION_SESSION_ID
 
 ## Telemetry Setup (Critical)

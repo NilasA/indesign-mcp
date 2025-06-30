@@ -2,6 +2,17 @@
 
 This document explains how to use the simplified Task-based approach for evolutionary testing.
 
+## ⚠️ ES Module Project Warning
+
+**This is an ES module project.** Use the correct execution patterns:
+
+✅ **CORRECT:**
+- `npm run evol-repl`
+- `npx tsx src/experimental/evolutionary/runEvolutionTest.ts`
+
+❌ **WRONG:**
+- `node -e "require('./dist/src/...)"` (CommonJS fails on ES modules)
+
 ## Overview
 
 The evolutionary testing system uses Claude Code's Task tool to spawn real Task agents that attempt to recreate layouts in InDesign. Claude Code then analyzes their behavior patterns and suggests improvements to the MCP tool descriptions.
