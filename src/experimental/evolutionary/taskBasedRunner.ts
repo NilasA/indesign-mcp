@@ -237,6 +237,109 @@ export class TaskBasedRunner {
   }
   
   /**
+   * Create orchestration guidance for Claude Code
+   * Shows the proper workflow including document reset between agents
+   */
+  createOrchestrationGuidance(config: TestConfig): string {
+    let guidance = '🔄 CLAUDE CODE EVOLUTION ORCHESTRATION\n';
+    guidance += '══════════════════════════════════════\n\n';
+    
+    guidance += `📊 Configuration:\n`;
+    guidance += `   • Test Case: ${config.testCase}\n`;
+    guidance += `   • Agents per generation: ${config.agentCount}\n`;
+    guidance += `   • Target score: ${config.targetScore}%\n`;
+    guidance += `   • Max generations: ${config.maxGenerations}\n\n`;
+    
+    guidance += `🔄 CRITICAL WORKFLOW (for each generation):\n\n`;
+    
+    for (let i = 1; i <= config.agentCount; i++) {
+      guidance += `   ${i}. AGENT ${i}:\n`;
+      guidance += `      • sessionId = runner.generateSessionId('agent-${i}', generation)\n`;
+      guidance += `      • prompt = runner.createTaskPrompt(config, 'agent-${i}', sessionId)\n`;
+      guidance += `      • [Use Task tool with prompt]\n`;
+      guidance += `      • [Wait for Task completion]\n`;
+      guidance += `      • telemetry = await runner.collectTaskTelemetry('agent-${i}', sessionId)\n`;
+      guidance += `      • run = await runner.processTaskResult('agent-${i}', telemetry, config)\n`;
+      if (i < config.agentCount) {
+        guidance += `      • 🔄 RESET: node reset-document.js  ← ESSENTIAL!\n`;
+      }
+      guidance += `\n`;
+    }
+    
+    guidance += `   ${config.agentCount + 1}. ANALYSIS:\n`;
+    guidance += `      • node analyze-telemetry.js  ← Full telemetry analysis (if data available)\n`;
+    guidance += `      • node quick-analysis.js     ← Quick analysis (always works)\n`;
+    guidance += `      • [Review patterns and generate improvements]\n`;
+    guidance += `      • [Apply improvements to MCP tool descriptions]\n\n`;
+    
+    guidance += `⚠️  WARNING: Skipping resetInDesignState() will cause:\n`;
+    guidance += `   • Document contamination between agents\n`;
+    guidance += `   • Invalid test results\n`;
+    guidance += `   • Evolutionary testing failure\n\n`;
+    
+    guidance += `✅ SUCCESS INDICATORS:\n`;
+    guidance += `   • Each agent starts with clean document\n`;
+    guidance += `   • Telemetry captured for all agents\n`;
+    guidance += `   • Layout metrics extracted successfully\n`;
+    guidance += `   • Score improvement over generations\n`;
+    
+    return guidance;
+  }
+  
+  /**
+   * Get reset instructions for Claude Code
+   */
+  getResetInstructions(): string {
+    let instructions = '🔄 DOCUMENT RESET INSTRUCTIONS\n';
+    instructions += '═══════════════════════════════\n\n';
+    
+    instructions += 'WHEN TO RESET:\n';
+    instructions += '• After each Task agent completes\n';
+    instructions += '• Before spawning next Task agent\n';
+    instructions += '• NOT after the last agent in generation\n\n';
+    
+    instructions += 'HOW TO RESET:\n';
+    instructions += 'Option 1 - Use the reset script:\n';
+    instructions += '```bash\n';
+    instructions += 'node reset-document.js\n';
+    instructions += '```\n\n';
+    instructions += 'Option 2 - Use MCP tools directly (if server running):\n';
+    instructions += '```bash\n';
+    instructions += '# Check document state\n';
+    instructions += 'indesign_status\n';
+    instructions += '# Get current text to remove it\n';
+    instructions += 'get_document_text\n';
+    instructions += '# Remove all text content\n';
+    instructions += 'remove_text {text: "[copy text from above]", all_occurrences: true}\n';
+    instructions += '# Validate clean state\n';
+    instructions += 'validate_layout\n';
+    instructions += '```\n\n';
+    instructions += 'Option 3 - If you have runner object:\n';
+    instructions += '```typescript\n';
+    instructions += 'await runner.resetInDesignState();\n';
+    instructions += '```\n\n';
+    
+    instructions += 'WHAT THIS DOES:\n';
+    instructions += '• Clears all page items (text frames, shapes, images)\n';
+    instructions += '• Removes custom paragraph/character styles\n';
+    instructions += '• Resets document to clean slate\n';
+    instructions += '• Preserves document dimensions and settings\n\n';
+    
+    instructions += 'ERROR HANDLING:\n';
+    instructions += '```typescript\n';
+    instructions += 'try {\n';
+    instructions += '  await runner.resetInDesignState();\n';
+    instructions += '  console.log("✓ Document reset successful");\n';
+    instructions += '} catch (error) {\n';
+    instructions += '  console.error("❌ Reset failed:", error.message);\n';
+    instructions += '  // May need to manually clear InDesign document\n';
+    instructions += '}\n';
+    instructions += '```\n';
+    
+    return instructions;
+  }
+  
+  /**
    * Handle post-Task telemetry collection
    * 
    * With file-based telemetry, Task agents write to JSONL files
@@ -520,6 +623,41 @@ export class TaskBasedRunner {
     return await this.mcpBridge.compareToReference(referenceMetrics);
   }
   
+  /**
+   * Load existing telemetry data from files for analysis
+   */
+  async loadExistingTelemetryData(): Promise<TelemetrySession[]> {
+    const { TelemetryCapture } = await import('../../tools/telemetry.js');
+    const telemetryDir = this.config.paths.telemetryDir;
+    
+    try {
+      const sessions: TelemetrySession[] = [];
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      
+      // Read all session files
+      const files = await fs.readdir(telemetryDir);
+      const sessionFiles = files.filter(f => f.startsWith('session_') && f.endsWith('.json'));
+      
+      for (const file of sessionFiles) {
+        try {
+          const filePath = path.join(telemetryDir, file);
+          const content = await fs.readFile(filePath, 'utf-8');
+          const session = JSON.parse(content);
+          sessions.push(session);
+        } catch (error) {
+          console.warn(`⚠️  Failed to load session file ${file}:`, error);
+        }
+      }
+      
+      console.log(`📊 Loaded ${sessions.length} telemetry sessions from ${sessionFiles.length} files`);
+      return sessions;
+    } catch (error) {
+      console.warn('⚠️  Failed to load telemetry data:', error);
+      return [];
+    }
+  }
+
   /**
    * Reset InDesign state between agents
    */

@@ -132,9 +132,16 @@ export async function exampleEvolutionWorkflow() {
       runs.push(run);
     }
     
-    // Reset for next agent
+    // CRITICAL: Reset document state between agents
     if (i < config.agentCount - 1) {
-      await runner.resetInDesignState();
+      debugLog(`\n🔄 Resetting InDesign state before agent ${i + 2}...`);
+      try {
+        await runner.resetInDesignState();
+        debugLog(`✓ Document reset successful - ready for agent ${i + 2}`);
+      } catch (error) {
+        debugLog(`❌ Reset failed: ${error instanceof Error ? error.message : String(error)}`);
+        throw new Error(`Document reset failed between agents: ${error}`);
+      }
     }
   }
   
@@ -245,7 +252,12 @@ To run evolutionary testing:
 
 Remember:
 - Run agents sequentially (InDesign constraint)
-- Reset state between agents
+- ALWAYS reset state between agents with runner.resetInDesignState()
 - Save telemetry for each run
 - Focus on most impactful improvements
+
+Critical Error Prevention:
+- Missing resetInDesignState() will contaminate results
+- Each agent must start with clean document
+- Reset after agent completion, before next agent spawn
 `;

@@ -61,9 +61,9 @@ indesign-mcp/                    # Main TypeScript MCP project
 This project uses ES modules (`"type": "module"` in package.json). 
 
 **✅ CORRECT Command Patterns:**
-- `npm run evol-repl` (recommended for evolution testing)
-- `npx tsx src/experimental/evolutionary/runEvolutionTest.ts`
-- `npm run build && npm start`
+- `npx tsx run-evolution-claude-code.ts` (Real Mode evolution testing - must run in Claude Code)
+- `npm run build && npm start` (MCP server startup)
+- `npm run lint && npm run typecheck` (validation)
 
 **❌ INCORRECT - DO NOT USE:**
 - `node -e "const x = require('./dist/...)"` (CommonJS require fails)
@@ -88,14 +88,16 @@ npm run lint:fix    # Auto-fix ESLint issues
 # Validation
 npm run build && npm start    # Validate compilation and server startup
 
-# Evolutionary Testing (Task-based)
-npm run evol-repl    # Start interactive evolution REPL (recommended)
-npx tsx src/experimental/evolutionary/runEvolutionTest.ts  # Direct test orchestrator
+# Evolutionary Testing (Real Mode)
+npx tsx run-evolution-claude-code.ts  # Setup script for Claude Code orchestration
 
-# Debug flags for evolutionary testing
-DEBUG_EVOLUTION=true npm run evol-repl      # Evolution workflow details
-DEBUG_TELEMETRY=true npm run evol-repl      # Telemetry system debugging  
-DEBUG_ALL=true npm run evol-repl            # Complete verbose output
+# Legacy Simulation Commands (DO NOT USE for real testing)
+npm run evolve:complete    # Simulation mode only - no real InDesign interaction
+
+# Debug flags for setup script
+DEBUG_EVOLUTION=true npx tsx run-evolution-claude-code.ts   # Evolution workflow details
+DEBUG_TELEMETRY=true npx tsx run-evolution-claude-code.ts   # Telemetry system debugging  
+DEBUG_ALL=true npx tsx run-evolution-claude-code.ts         # Complete verbose output
 ```
 
 ## 📋 Git Workflow
@@ -302,15 +304,15 @@ DEBUG_ALL=true           # Enable all debug categories
 ```
 
 **Usage Examples:**
-- Basic troubleshooting: `DEBUG_EVOLUTION=true npm run evol-repl`
-- Telemetry issues: `DEBUG_TELEMETRY=true DEBUG_EVOLUTION=true npm run evol-repl`
-- Full debugging: `DEBUG_ALL=true npm run evol-repl`
-- Clean output: `npm run evol-repl` (default - minimal output)
+- Basic troubleshooting: `DEBUG_EVOLUTION=true npx tsx run-evolution-claude-code.ts`
+- Telemetry issues: `DEBUG_TELEMETRY=true npx tsx run-evolution-claude-code.ts`
+- Full debugging: `DEBUG_ALL=true npx tsx run-evolution-claude-code.ts`
+- Clean output: `npx tsx run-evolution-claude-code.ts` (default - minimal output)
 
 ### Quick Start Guides
 For running the evolutionary testing system:
-- **Quick Start Guide**: `EVOLUTIONARY-TEST-QUICKSTART.md` - Comprehensive step-by-step instructions
-- **Checklist**: `EVOLUTIONARY-TEST-CHECKLIST.md` - Concise reference for quick execution
+- **Quick Start Guide**: `EVOLUTION-QUICK-START.md` - Complete Real Mode workflow instructions
+- **Important**: Must run inside Claude Code CLI for real testing (not simulation mode)
 
 ### Key Components
 - **Telemetry**: Captures all tool calls with parameters (now with retry logic and queue management)
@@ -318,27 +320,41 @@ For running the evolutionary testing system:
 - **Pattern Analysis**: Identifies common failure patterns
 - **Claude Code Analysis**: Direct pattern interpretation and improvement generation
 
-### Usage
-1. Start with the quick start guide for practical instructions
-2. Use the checklist for rapid execution
-3. See `EVOLUTIONARY-TEST-PROGRESS.md` for implementation details
-4. Reference `src/experimental/evolutionary/README-TASK-BASED.md` for conceptual overview
+### Usage (Real Mode)
+1. **Claude Code Required**: Must run from Claude Code CLI, not standalone Node.js
+2. **Setup**: `npx tsx run-evolution-claude-code.ts` to initialize
+3. **Orchestration**: Claude Code uses Task tool to spawn real agents
+4. **Reference**: Follow `EVOLUTION-QUICK-START.md` for complete workflow
 
 ### **⚠️ Critical Operational Requirements**
-- **Timeout Configuration**: Use `timeout 7m` for evolution commands (default 2min is insufficient)
-- **Single Instance Rule**: Create ONE evolution instance, never multiple competing `node -e` processes
-- **Never Skip processAgentCompletion()**: Contains document reset logic and fallback telemetry
-- **Environment Variables**: `TELEMETRY_WAIT_TIMEOUT` configures telemetry collection timeout (default 5min)
+- **Claude Code Environment**: Evolution testing only works in Claude Code CLI, not standalone Node.js
+- **Real vs Simulation Mode**: `npm run evolve:complete` = simulation (fake data), Claude Code orchestration = real testing
+- **Fixed CLI Bug**: Updated `run-evolution-claude-code.ts` removes global assignment that crashed Claude Code CLI
+- **Task Tool Required**: Real agents spawn via Claude Code's Task tool, not subprocess hooks
 
 ### **Quick Troubleshooting**
-- Command timeout after 2min → Use `timeout 7m node -e "..."`
-- No telemetry found → System has fallback, still call `processAgentCompletion()`
-- Document contamination → Indicates `processAgentCompletion()` was skipped
+- **"Not running in Claude Code environment"** → Using simulation mode, must run from Claude Code CLI
+- **Claude Code CLI crashes** → Use fixed `run-evolution-claude-code.ts` (removes global assignment bug)
+- **No InDesign activity** → Verify Real Mode (Claude Code orchestration), not simulation
+- **Setup script completes but no agents** → Claude Code should use Task tool with displayed prompt
 
 **Note on Minimal Prompts**: Task agents receive only "Recreate this academic book page layout in InDesign using the available MCP tools" plus a reference. This intentionally minimal approach:
 - Avoids telling agents they're being tested (Hawthorne effect)
 - Exposes true MCP usability issues without masking them
 - Tests natural tool discovery without hand-holding
 - Reveals where the MCP needs improvement
+
+## 🚀 Running Evolution Tests (Quick Command)
+
+For Claude Code to run a complete evolution test, use this exact prompt:
+
+> "Please run the evolution test following the EVOLUTION-QUICK-START.md guide. Start with the setup script, then spawn 3 agents per generation for 3 generations, analyzing patterns between each generation."
+
+Claude Code will automatically:
+1. Run `npx tsx run-evolution-claude-code.ts` setup script
+2. Use Task tool to spawn real agents with the displayed prompt
+3. Monitor InDesign document changes and capture telemetry
+4. Analyze patterns between generations
+5. Report final recommendations for MCP tool improvements
 
 This guide provides Claude Code with essential project context for continuing InDesign MCP development efficiently.
