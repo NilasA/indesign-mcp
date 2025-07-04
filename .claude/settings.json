@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/evolution/task-interceptor.py"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__indesign__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/evolution/telemetry-enhancer.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "mcp__indesign__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/evolution/telemetry-collector.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.claude/evolution/checkpoint-manager.py"
+          }
+        ]
+      }
+    ]
+  }
+}

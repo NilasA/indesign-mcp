@@ -13,6 +13,10 @@ export * from './types.js';
 export { TaskBasedRunner, createTaskBasedRunner } from './taskBasedRunner.js';
 export { ClaudeAnalyzer } from './claudeAnalyzer.js';
 
+// Hooks-based automation (Phase 2+)
+export { HooksEvolutionController, createHooksController } from './hooksController.js';
+export type { HooksControllerConfig } from './hooksController.js';
+
 // Pattern analysis and improvement
 export { PatternAnalyzer } from './patternAnalyzer.js';
 export { PatternPresenter } from './patternPresenter.js';
