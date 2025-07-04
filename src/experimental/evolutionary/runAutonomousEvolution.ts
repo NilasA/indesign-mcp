@@ -20,6 +20,8 @@ interface CLIOptions {
   maxGenerations?: number;
   autoApply?: boolean;
   dryRun?: boolean;
+  dashboard?: boolean;
+  dashboardPort?: number;
   help?: boolean;
 }
 
@@ -44,6 +46,10 @@ function parseArguments(): CLIOptions {
       options.autoApply = true;
     } else if (arg === '--dry-run') {
       options.dryRun = true;
+    } else if (arg === '--dashboard') {
+      options.dashboard = true;
+    } else if (arg.startsWith('--dashboard-port=')) {
+      options.dashboardPort = parseInt(arg.split('=')[1]);
     }
   }
   
@@ -64,12 +70,15 @@ Options:
   --max-generations=N      Maximum generations to run (default: 5)
   --auto-apply             Automatically apply improvements (default: false)
   --dry-run               Simulate without making changes (default: false)
+  --dashboard             Enable real-time analytics dashboard (default: false)
+  --dashboard-port=N      Dashboard port (default: 3000)
   --help, -h              Show this help message
 
 Examples:
   npm run evolve:complete
   npm run evolve:complete -- --test-case=book-page --target-score=90
   npm run evolve:complete -- --auto-apply --max-generations=10
+  npm run evolve:complete -- --dashboard --dashboard-port=3001
 
 Prerequisites:
   - InDesign must be running with a document open
@@ -102,6 +111,10 @@ async function main(): Promise<void> {
       autoApplyImprovements: options.autoApply || false,
       maxAutonomousGenerations: options.maxGenerations || 5,
       requireHumanApproval: !options.autoApply,
+      dashboard: {
+        enabled: options.dashboard || false,
+        port: options.dashboardPort || 3000
+      },
       // Default reference metrics (should be overridden with real data)
       referenceMetrics: {
         frames: [
@@ -119,6 +132,10 @@ async function main(): Promise<void> {
     console.log(`  Max Generations: ${config.maxGenerations}`);
     console.log(`  Auto-apply Improvements: ${config.autoApplyImprovements}`);
     console.log(`  Hooks Enabled: ${config.hooksEnabled}`);
+    console.log(`  Dashboard Enabled: ${config.dashboard?.enabled}`);
+    if (config.dashboard?.enabled) {
+      console.log(`  Dashboard Port: ${config.dashboard.port}`);
+    }
     
     if (options.dryRun) {
       console.log('\n🔍 DRY RUN MODE - No changes will be made');

@@ -185,7 +185,7 @@ export class ToolModifier {
       return false;
     }
     
-    const { call: toolCall, resolvedSchema } = toolInfo;
+    const { call: toolCallExpr, resolvedSchema } = toolInfo;
     
     // Use resolved schema if available
     if (resolvedSchema) {
@@ -212,7 +212,7 @@ export class ToolModifier {
     }
     
     // Fallback: try to work with the schema argument directly
-    const args = toolCall.getArguments();
+    const args = toolCallExpr.getArguments();
     if (args.length < 2) {
       console.error('Invalid tool registration format');
       return false;
@@ -286,13 +286,13 @@ export class ToolModifier {
       return false;
     }
     
-    const toolCall = this.findToolRegistration(sourceFile, improvement.tool);
-    if (!toolCall) {
+    const toolInfo = this.findToolRegistration(sourceFile, improvement.tool);
+    if (!toolInfo) {
       console.error(`Tool registration not found for: ${improvement.tool}`);
       return false;
     }
     
-    const args = toolCall.getArguments();
+    const args = toolInfo.call.getArguments();
     if (args.length < 2) {
       console.error('Invalid tool registration format');
       return false;
@@ -395,14 +395,14 @@ export class ToolModifier {
    * Add an example to the tool
    */
   private async addExample(sourceFile: SourceFile, improvement: Improvement): Promise<boolean> {
-    const toolCall = this.findToolRegistration(sourceFile, improvement.tool);
-    if (!toolCall) {
+    const toolInfo = this.findToolRegistration(sourceFile, improvement.tool);
+    if (!toolInfo) {
       console.error(`Tool registration not found for: ${improvement.tool}`);
       return false;
     }
     
     // Find the handler function (3rd argument)
-    const args = toolCall.getArguments();
+    const args = toolInfo.call.getArguments();
     if (args.length < 3) {
       console.error('No handler function found');
       return false;
@@ -435,13 +435,13 @@ export class ToolModifier {
     }
     
     // For field-specific constraints, we need to modify the Zod schema
-    const toolCall = this.findToolRegistration(sourceFile, improvement.tool);
-    if (!toolCall) {
+    const toolInfo = this.findToolRegistration(sourceFile, improvement.tool);
+    if (!toolInfo) {
       console.error(`Tool registration not found for: ${improvement.tool}`);
       return false;
     }
     
-    const args = toolCall.getArguments();
+    const args = toolInfo.call.getArguments();
     if (args.length < 2) return false;
     
     const schemaArg = args[1];
@@ -534,14 +534,14 @@ export class ToolModifier {
     }
     
     const sourceFile = this.project.addSourceFileAtPath(toolFile);
-    const toolCall = this.findToolRegistration(sourceFile, toolName);
+    const toolInfo = this.findToolRegistration(sourceFile, toolName);
     
-    if (!toolCall) {
+    if (!toolInfo) {
       this.project.removeSourceFile(sourceFile);
       return null;
     }
     
-    const args = toolCall.getArguments();
+    const args = toolInfo.call.getArguments();
     if (args.length < 2) {
       this.project.removeSourceFile(sourceFile);
       return null;

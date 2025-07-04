@@ -25,10 +25,12 @@
     "@types/node": "^22.15.30",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3",
+    "ws": "^8.18.0",
     "zod": "^3.25.57"
   },
   "devDependencies": {
     "@types/jest": "^29.5.3",
+    "@types/ws": "^8.5.12",
     "@typescript-eslint/eslint-plugin": "^8.34.1",
     "@typescript-eslint/parser": "^8.34.1",
     "eslint": "^9.29.0",

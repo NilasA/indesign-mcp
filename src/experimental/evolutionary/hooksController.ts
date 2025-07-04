@@ -10,7 +10,9 @@ import { PatternAnalyzer } from './patternAnalyzer.js';
 import { ClaudeAnalyzer } from './claudeAnalyzer.js';
 import { ImprovementManager } from './improvementManager.js';
 import { WorkflowValidator } from './validation.js';
+import { DashboardIntegration } from './dashboard.js';
 import { TestConfig, TestRun, Pattern, Improvement, GenerationResult, ImprovementType } from './types.js';
+import { TelemetrySession } from '../../tools/telemetry.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -23,6 +25,10 @@ export interface HooksControllerConfig extends TestConfig {
   autoApplyImprovements: boolean;
   maxAutonomousGenerations: number;
   requireHumanApproval: boolean;
+  dashboard?: {
+    enabled: boolean;
+    port?: number;
+  };
 }
 
 /**
@@ -34,24 +40,18 @@ export class HooksEvolutionController {
   private patternAnalyzer: PatternAnalyzer;
   private claudeAnalyzer: ClaudeAnalyzer;
   private improvementManager: ImprovementManager;
+  private dashboardIntegration: DashboardIntegration;
   private currentGeneration: number = 0;
   private isAutonomousMode: boolean = false;
 
   constructor(config: HooksControllerConfig) {
     this.config = config;
-    // Extract base config for TaskBasedRunner
-    const baseConfig = {
-      testCase: config.testCase,
-      agentCount: config.agentCount,
-      maxGenerations: config.maxGenerations,
-      targetScore: config.targetScore,
-      referenceMetrics: config.referenceMetrics,
-      outputDir: config.outputDir
-    };
-    this.taskRunner = new TaskBasedRunner(baseConfig);
-    this.patternAnalyzer = new PatternAnalyzer(baseConfig);
+    // Extract base config for TaskBasedRunner (simplified)
+    this.taskRunner = new TaskBasedRunner();
+    this.patternAnalyzer = new PatternAnalyzer();
     this.claudeAnalyzer = new ClaudeAnalyzer();
     this.improvementManager = new ImprovementManager();
+    this.dashboardIntegration = new DashboardIntegration();
   }
 
   /**
@@ -151,6 +151,9 @@ export class HooksEvolutionController {
     
     await this.configureHooks();
     
+    // Initialize dashboard if enabled
+    await this.dashboardIntegration.initialize(this.config);
+    
     // Enable autonomous mode
     this.isAutonomousMode = true;
     
@@ -169,6 +172,9 @@ export class HooksEvolutionController {
         
         const generationResult = await this.runGeneration(generation);
         results.push(generationResult);
+        
+        // Update dashboard with generation results
+        this.dashboardIntegration.updateGeneration(generationResult);
         
         // Check if we've reached target score
         if (generationResult.averageScore >= this.config.targetScore) {
@@ -192,6 +198,9 @@ export class HooksEvolutionController {
       // Clean up environment
       this.isAutonomousMode = false;
       delete process.env.EVOLUTION_SESSION_ACTIVE;
+      
+      // Shutdown dashboard
+      await this.dashboardIntegration.shutdown();
     }
     
     return results;
@@ -221,11 +230,12 @@ export class HooksEvolutionController {
         
         // Create failed test run record
         const failedTelemetry: TelemetrySession = {
-          sessionId: `failed-${agentId}`,
-          toolCalls: [],
+          id: `failed-${agentId}`,
+          calls: [],
           startTime: Date.now(),
           endTime: Date.now(),
-          metadata: { error: error instanceof Error ? error.message : String(error) }
+          agentId,
+          generation
         };
         
         testRuns.push({
@@ -243,6 +253,9 @@ export class HooksEvolutionController {
     
     // Analyze patterns from collected telemetry
     const patterns = this.patternAnalyzer.analyzePatterns(testRuns);
+    
+    // Update dashboard with patterns
+    this.dashboardIntegration.updatePatterns(patterns);
     
     // Calculate generation metrics
     const successfulRuns = testRuns.filter(run => run.success);
@@ -276,11 +289,12 @@ export class HooksEvolutionController {
     try {
       // Simulate a task agent run with basic telemetry
       const telemetry: TelemetrySession = {
-        sessionId: agentId,
-        toolCalls: [],
+        id: agentId,
+        calls: [],
         startTime,
         endTime: Date.now() + 5000, // Simulate 5 second run
-        metadata: { simulated: true }
+        agentId,
+        generation
       };
       
       return {
@@ -296,19 +310,20 @@ export class HooksEvolutionController {
           columns: 1
         },
         comparisonResult: {
+          match: true,
           score: Math.random() * 100, // Random score for simulation
-          differences: [],
-          matches: []
+          deviations: []
         }
       };
       
     } catch (error) {
       const failedTelemetry: TelemetrySession = {
-        sessionId: agentId,
-        toolCalls: [],
+        id: agentId,
+        calls: [],
         startTime,
         endTime: Date.now(),
-        metadata: { error: error instanceof Error ? error.message : String(error) }
+        agentId,
+        generation
       };
       
       return {
@@ -407,13 +422,16 @@ export function createHooksController(config: Partial<HooksControllerConfig>): H
   const defaultConfig: HooksControllerConfig = {
     testCase: 'hooks-evolution',
     agentCount: 3,
+    generation: 1,
     maxGenerations: 5,
     targetScore: 85,
+    improvementThreshold: 0.1,
     referenceMetrics: {
       frames: [],
       margins: { top: 36, left: 36, bottom: 36, right: 36 },
       columns: 1
     },
+    referenceImage: 'reference.png',
     hooksEnabled: true,
     autoApplyImprovements: false,
     maxAutonomousGenerations: 10,

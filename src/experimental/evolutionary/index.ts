@@ -15,6 +15,7 @@ export { ClaudeAnalyzer } from './claudeAnalyzer.js';
 
 // Hooks-based automation (Phase 2+)
 export { HooksEvolutionController, createHooksController } from './hooksController.js';
+export { EvolutionDashboard, createEvolutionDashboard, DashboardIntegration } from './dashboard.js';
 export type { HooksControllerConfig } from './hooksController.js';
 
 // Pattern analysis and improvement
