@@ -6,7 +6,7 @@ This hook intercepts Task tool calls and sets up evolution session context.
 It enables automatic telemetry capture and session coherence for evolutionary testing.
 
 Hook Type: PreToolUse
-Matcher: "Task"
+Matcher: "^Task$"
 """
 
 import json
@@ -74,7 +74,7 @@ def main():
         tool_name = input_data.get('tool', {}).get('name', '')
         parameters = input_data.get('tool', {}).get('arguments', {})
         
-        # Only process Task tool calls
+        # Only process exact Task tool calls (not tools containing "Task")
         if tool_name != 'Task':
             # Pass through unchanged
             print(json.dumps(input_data))

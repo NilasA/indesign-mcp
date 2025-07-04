@@ -115,7 +115,7 @@ export class HooksEvolutionController {
       hooks: {
         PreToolUse: [
           {
-            matcher: "Task",
+            matcher: "^Task$",
             hooks: [
               {
                 type: "command",
