@@ -9,6 +9,7 @@ import { TextContent } from "@modelcontextprotocol/sdk/types.js";
 import { executeExtendScript } from "../../extendscript.js";
 import { ENV, getString, getInt } from "../../utils/env.js";
 import type { FrameScope, TextFlowAction } from "../../types.js";
+import { withChangeTracking } from "../../utils/changeSummary.js";
 
 /**
  * Registers advanced utility tools with the MCP server
@@ -138,7 +139,7 @@ export async function registerUtilityTools(server: McpServer): Promise<void> {
       frame_scope: z.enum(["document", "page"]).default("document").describe("Whether to use document-wide or page-specific indexing"),
       page_number: z.number().int().default(1).describe("Page number for page-specific indexing (1-based)")
     },
-    async (args) => {
+    withChangeTracking(server, "thread_text_frames")(async (args: any) => {
       const sourceFrameIndex = args.source_frame_index || 0;
       const targetFrameIndex = args.target_frame_index || 1;
       const frameScope: FrameScope = args.frame_scope || "document";
@@ -154,72 +155,84 @@ export async function registerUtilityTools(server: McpServer): Promise<void> {
           throw new Error("No active document found.");
         }
         
-        var sourceFrame, targetFrame;
-        
-        if ("${frameScope}" === "document") {
-          // Use document-wide text frame indexing
-          if (doc.textFrames.length <= ${sourceFrameIndex}) {
-            throw new Error("Source text frame index " + ${sourceFrameIndex} + " out of range. Document has " + doc.textFrames.length + " text frames.");
-          }
-          if (doc.textFrames.length <= ${targetFrameIndex}) {
-            throw new Error("Target text frame index " + ${targetFrameIndex} + " out of range. Document has " + doc.textFrames.length + " text frames.");
-          }
-          
-          sourceFrame = doc.textFrames[${sourceFrameIndex}];
-          targetFrame = doc.textFrames[${targetFrameIndex}];
-        } else {
-          // Use page-specific text frame indexing
-          if (doc.pages.length < ${pageNumber}) {
-            throw new Error("Page number " + ${pageNumber} + " out of range. Document has " + doc.pages.length + " pages.");
-          }
-          
-          var page = doc.pages[${pageNumber} - 1];
-          if (page.textFrames.length <= ${sourceFrameIndex}) {
-            throw new Error("Source text frame index " + ${sourceFrameIndex} + " out of range on page " + ${pageNumber} + ". Page has " + page.textFrames.length + " text frames.");
-          }
-          
-          sourceFrame = page.textFrames[${sourceFrameIndex}];
-          
-          // For target, check if it's on same page or use document indexing
-          if (page.textFrames.length > ${targetFrameIndex}) {
-            targetFrame = page.textFrames[${targetFrameIndex}];
-          } else {
-            if (doc.textFrames.length <= ${targetFrameIndex}) {
-              throw new Error("Target text frame index " + ${targetFrameIndex} + " out of range in document.");
-            }
-            targetFrame = doc.textFrames[${targetFrameIndex}];
-          }
-        }
-        
-        // Check and handle existing threads
-        var warnings = [];
-        
-        if (sourceFrame.nextTextFrame && sourceFrame.nextTextFrame.isValid) {
-          warnings.push("Breaking existing outgoing thread from source frame");
-          sourceFrame.nextTextFrame = null;
-        }
-        
-        if (targetFrame.previousTextFrame && targetFrame.previousTextFrame.isValid) {
-          warnings.push("Breaking existing incoming thread to target frame");
-          targetFrame.previousTextFrame.nextTextFrame = null;
-        }
-        
-        // Perform the threading
+        var oldUnit = app.scriptPreferences.measurementUnit;
+        var oldHU = doc.viewPreferences.horizontalMeasurementUnits;
+        var oldVU = doc.viewPreferences.verticalMeasurementUnits;
         try {
-          sourceFrame.nextTextFrame = targetFrame;
-        } catch (e) {
-          throw new Error("Failed to thread frames: " + e.message);
+          app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+          doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.POINTS;
+          doc.viewPreferences.verticalMeasurementUnits = MeasurementUnits.POINTS;
+          var sourceFrame, targetFrame;
+          
+          if ("${frameScope}" === "document") {
+            // Use document-wide text frame indexing
+            if (doc.textFrames.length <= ${sourceFrameIndex}) {
+              throw new Error("Source text frame index " + ${sourceFrameIndex} + " out of range. Document has " + doc.textFrames.length + " text frames.");
+            }
+            if (doc.textFrames.length <= ${targetFrameIndex}) {
+              throw new Error("Target text frame index " + ${targetFrameIndex} + " out of range. Document has " + doc.textFrames.length + " text frames.");
+            }
+            
+            sourceFrame = doc.textFrames[${sourceFrameIndex}];
+            targetFrame = doc.textFrames[${targetFrameIndex}];
+          } else {
+            // Use page-specific text frame indexing
+            if (doc.pages.length < ${pageNumber}) {
+              throw new Error("Page number " + ${pageNumber} + " out of range. Document has " + doc.pages.length + " pages.");
+            }
+            
+            var page = doc.pages[${pageNumber} - 1];
+            if (page.textFrames.length <= ${sourceFrameIndex}) {
+              throw new Error("Source text frame index " + ${sourceFrameIndex} + " out of range on page " + ${pageNumber} + ". Page has " + page.textFrames.length + " text frames.");
+            }
+            
+            sourceFrame = page.textFrames[${sourceFrameIndex}];
+            
+            // For target, check if it's on same page or use document indexing
+            if (page.textFrames.length > ${targetFrameIndex}) {
+              targetFrame = page.textFrames[${targetFrameIndex}];
+            } else {
+              if (doc.textFrames.length <= ${targetFrameIndex}) {
+                throw new Error("Target text frame index " + ${targetFrameIndex} + " out of range in document.");
+              }
+              targetFrame = doc.textFrames[${targetFrameIndex}];
+            }
+          }
+          
+          // Check and handle existing threads
+          var warnings = [];
+          
+          if (sourceFrame.nextTextFrame && sourceFrame.nextTextFrame.isValid) {
+            warnings.push("Breaking existing outgoing thread from source frame");
+            sourceFrame.nextTextFrame = null;
+          }
+          
+          if (targetFrame.previousTextFrame && targetFrame.previousTextFrame.isValid) {
+            warnings.push("Breaking existing incoming thread to target frame");
+            targetFrame.previousTextFrame.nextTextFrame = null;
+          }
+          
+          // Perform the threading
+          try {
+            sourceFrame.nextTextFrame = targetFrame;
+          } catch (e) {
+            throw new Error("Failed to thread frames: " + e.message);
+          }
+          
+          var result = "Successfully threaded text frames:\\n";
+          result += "- Source: Frame " + ${sourceFrameIndex} + " (Has content: " + (sourceFrame.contents.length > 0) + ", Overflows: " + sourceFrame.overflows + ")\\n";
+          result += "- Target: Frame " + ${targetFrameIndex} + " (Now receives overflow text)";
+          
+          if (warnings.length > 0) {
+            result += "\\n\\nWarnings:\\n" + warnings.join("\\n");
+          }
+          
+          result;
+        } finally {
+          app.scriptPreferences.measurementUnit = oldUnit;
+          doc.viewPreferences.horizontalMeasurementUnits = oldHU;
+          doc.viewPreferences.verticalMeasurementUnits = oldVU;
         }
-        
-        var result = "Successfully threaded text frames:\\n";
-        result += "- Source: Frame " + ${sourceFrameIndex} + " (Has content: " + (sourceFrame.contents.length > 0) + ", Overflows: " + sourceFrame.overflows + ")\\n";
-        result += "- Target: Frame " + ${targetFrameIndex} + " (Now receives overflow text)";
-        
-        if (warnings.length > 0) {
-          result += "\\n\\nWarnings:\\n" + warnings.join("\\n");
-        }
-        
-        result;
       `;
       
       const result = await executeExtendScript(script);
@@ -230,7 +243,7 @@ export async function registerUtilityTools(server: McpServer): Promise<void> {
           text: result.success ? `Successfully threaded text frames:\n${result.result}` : `Error threading text frames: ${result.error}`
         }]
       };
-    }
+    })
   );
 
   // Register resolve_overset_text tool

@@ -16,8 +16,13 @@ test('plain numbers pass through unchanged', () => {
   expect(toPoints('72', 'y', 200, 400)).toBe(72);
 });
 
-test('throws error for unsupported values', () => {
-  expect(() => toPoints('10mm', 'x', 200, 400)).toThrow('Unsupported coordinate value: 10mm');
-  expect(() => toPoints('1in', 'y', 200, 400)).toThrow('Unsupported coordinate value: 1in');
+test('length unit strings convert correctly', () => {
+  expect(toPoints('10mm', 'x', 0, 0)).toBeCloseTo(10 * 2.834645669);
+  expect(toPoints('2cm', 'x', 0, 0)).toBeCloseTo(2 * 28.34645669);
+  expect(toPoints('1in', 'y', 0, 0)).toBeCloseTo(72);
+  expect(toPoints('96px', 'y', 0, 0)).toBeCloseTo(96 * 0.75);
+});
+
+test('throws error for unsupported strings', () => {
   expect(() => toPoints('invalid', 'x', 200, 400)).toThrow('Unsupported coordinate value: invalid');
 }); 

@@ -220,6 +220,12 @@ export class TelemetryCapture {
     if (!this.inTest) {
       console.log('Telemetry write queue flushed');
     }
+
+    // Ensure any scheduled flush timers are cleared to prevent leaks
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
   }
   
   /**

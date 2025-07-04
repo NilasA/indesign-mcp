@@ -6,7 +6,9 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { executeExtendScript } from "../../extendscript.js";
+import { toPoints } from "../../utils/coords.js";
 import type { TransformationType, AlignmentType, DistributionType } from "../../types.js";
+import { withChangeTracking } from "../../utils/changeSummary.js";
 
 /**
  * Registers all object transformation tools with the MCP server
@@ -17,17 +19,43 @@ export async function registerTransformTools(server: McpServer): Promise<void> {
     "transform_objects",
     {
       operation: z.enum(["move", "scale", "rotate", "skew"]).describe("Type of transformation to apply"),
-      x: z.number().default(0).describe("X offset for move, X scale factor for scale, or X coordinate"),
-      y: z.number().default(0).describe("Y offset for move, Y scale factor for scale, or Y coordinate"),
+      x: z.union([z.number(), z.string()]).default(0).describe("X offset for move, X scale factor for scale, or X coordinate (supports units: 100, '50mm', '2in', '72pt', '50%')"),
+      y: z.union([z.number(), z.string()]).default(0).describe("Y offset for move, Y scale factor for scale, or Y coordinate (supports units: 100, '50mm', '2in', '72pt', '50%')"),
       rotation: z.number().default(0).describe("Rotation angle in degrees for rotate transformation"),
       scale_x: z.number().default(1.0).describe("X scale factor (1.0 = 100%)"),
       scale_y: z.number().default(1.0).describe("Y scale factor (1.0 = 100%)"),
       use_selection: z.boolean().default(true).describe("Transform only selected objects, or all objects if none selected")
     },
-    async (args) => {
+    withChangeTracking(server, "transform_objects")(async (args: any) => {
       const transformation: TransformationType = args.operation;
-      const x = args.x || 0;
-      const y = args.y || 0;
+      
+      // Get page dimensions for unit conversion (use defaults if not available)
+      const pageDimsScript = `
+        if (app.documents.length === 0) {
+          throw new Error("No documents are open in InDesign. Please open a document first.");
+        }
+        var doc = app.activeDocument;
+        var page = doc.pages[0];
+        var bounds = page.bounds;
+        JSON.stringify({ width: bounds[3] - bounds[1], height: bounds[2] - bounds[0] });
+      `;
+      
+      let pageWidth = 612; // Default US Letter width in points
+      let pageHeight = 792; // Default US Letter height in points
+      
+      try {
+        const pageDimsResult = await executeExtendScript(pageDimsScript);
+        if (pageDimsResult.success && pageDimsResult.result) {
+          const dims = JSON.parse(pageDimsResult.result);
+          pageWidth = dims.width;
+          pageHeight = dims.height;
+        }
+      } catch (e) {
+        // Use defaults if page dimension detection fails
+      }
+      
+      const x = toPoints(args.x ?? 0, "x", pageWidth, pageHeight);
+      const y = toPoints(args.y ?? 0, "y", pageWidth, pageHeight);
       const rotation = args.rotation || 0;
       const scaleX = args.scale_x || 1.0;
       const scaleY = args.scale_y || 1.0;
@@ -43,7 +71,13 @@ export async function registerTransformTools(server: McpServer): Promise<void> {
           throw new Error("No active document found.");
         }
         
+        var oldUnit = app.scriptPreferences.measurementUnit;
+        var oldHU = doc.viewPreferences.horizontalMeasurementUnits;
+        var oldVU = doc.viewPreferences.verticalMeasurementUnits;
         try {
+          app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+          doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.POINTS;
+          doc.viewPreferences.verticalMeasurementUnits = MeasurementUnits.POINTS;
           var objectsToTransform = [];
           
           if (${useSelection ? "true" : "false"} && app.selection.length > 0) {
@@ -103,10 +137,16 @@ export async function registerTransformTools(server: McpServer): Promise<void> {
             transformedCount++;
           }
           
+          // Ensure transformations are committed
+          doc.recompose();
           "Successfully transformed " + transformedCount + " objects using ${transformation}";
           
         } catch (e) {
           throw new Error("Transform failed: " + e.message);
+        } finally {
+          app.scriptPreferences.measurementUnit = oldUnit;
+          doc.viewPreferences.horizontalMeasurementUnits = oldHU;
+          doc.viewPreferences.verticalMeasurementUnits = oldVU;
         }
       `;
 
@@ -127,21 +167,46 @@ export async function registerTransformTools(server: McpServer): Promise<void> {
           }]
         };
       }
-    }
+    })
   );
 
   // Register duplicate_objects tool
   server.tool(
     "duplicate_objects",
     {
-      offsetX: z.number().default(10).describe("X offset for duplicated objects"),
-      offsetY: z.number().default(10).describe("Y offset for duplicated objects"),
+      offsetX: z.union([z.number(), z.string()]).default(10).describe("X offset for duplicated objects (supports units: 100, '50mm', '2in', '72pt', '50%')"),
+      offsetY: z.union([z.number(), z.string()]).default(10).describe("Y offset for duplicated objects (supports units: 100, '50mm', '2in', '72pt', '50%')"),
       count: z.number().default(1).describe("Number of duplicates to create"),
       use_selection: z.boolean().default(true).describe("Duplicate only selected objects, or all objects if none selected")
     },
-    async (args) => {
-      const offsetX = args.offsetX || 10;
-      const offsetY = args.offsetY || 10;
+    withChangeTracking(server, "duplicate_objects")(async (args: any) => {
+      // Get page dimensions for unit conversion (use defaults if not available)
+      const pageDimsScript = `
+        if (app.documents.length === 0) {
+          throw new Error("No documents are open in InDesign. Please open a document first.");
+        }
+        var doc = app.activeDocument;
+        var page = doc.pages[0];
+        var bounds = page.bounds;
+        JSON.stringify({ width: bounds[3] - bounds[1], height: bounds[2] - bounds[0] });
+      `;
+      
+      let pageWidth = 612; // Default US Letter width in points
+      let pageHeight = 792; // Default US Letter height in points
+      
+      try {
+        const pageDimsResult = await executeExtendScript(pageDimsScript);
+        if (pageDimsResult.success && pageDimsResult.result) {
+          const dims = JSON.parse(pageDimsResult.result);
+          pageWidth = dims.width;
+          pageHeight = dims.height;
+        }
+      } catch (e) {
+        // Use defaults if page dimension detection fails
+      }
+      
+      const offsetX = toPoints(args.offsetX ?? 10, "x", pageWidth, pageHeight);
+      const offsetY = toPoints(args.offsetY ?? 10, "y", pageWidth, pageHeight);
       const count = Math.max(1, Math.min(args.count || 1, 10)); // Limit to 10 duplicates
       const useSelection = args.use_selection !== false;
 
@@ -155,7 +220,13 @@ export async function registerTransformTools(server: McpServer): Promise<void> {
           throw new Error("No active document found.");
         }
         
+        var oldUnit = app.scriptPreferences.measurementUnit;
+        var oldHU = doc.viewPreferences.horizontalMeasurementUnits;
+        var oldVU = doc.viewPreferences.verticalMeasurementUnits;
         try {
+          app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+          doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.POINTS;
+          doc.viewPreferences.verticalMeasurementUnits = MeasurementUnits.POINTS;
           var objectsToDuplicate = [];
           
           if (${useSelection ? "true" : "false"} && app.selection.length > 0) {
@@ -191,11 +262,12 @@ export async function registerTransformTools(server: McpServer): Promise<void> {
                 
                 // Move the duplicate
                 var currentBounds = duplicatedObj.geometricBounds;
+                function pt(v) { return UnitValue(v, "pt"); }
                 duplicatedObj.geometricBounds = [
-                  currentBounds[0] + currentOffsetY,
-                  currentBounds[1] + currentOffsetX,
-                  currentBounds[2] + currentOffsetY,
-                  currentBounds[3] + currentOffsetX
+                  pt(currentBounds[0] + currentOffsetY),
+                  pt(currentBounds[1] + currentOffsetX),
+                  pt(currentBounds[2] + currentOffsetY),
+                  pt(currentBounds[3] + currentOffsetX)
                 ];
                 
                 duplicatedCount++;
@@ -206,10 +278,16 @@ export async function registerTransformTools(server: McpServer): Promise<void> {
             }
           }
           
+          // Force a recompose so geometry is finalized before we restore prefs
+          doc.recompose();
           "Successfully created " + duplicatedCount + " duplicates with offset [${offsetX}, ${offsetY}]";
           
         } catch (e) {
           throw new Error("Duplicate failed: " + e.message);
+        } finally {
+          app.scriptPreferences.measurementUnit = oldUnit;
+          doc.viewPreferences.horizontalMeasurementUnits = oldHU;
+          doc.viewPreferences.verticalMeasurementUnits = oldVU;
         }
       `;
 
@@ -230,7 +308,7 @@ export async function registerTransformTools(server: McpServer): Promise<void> {
           }]
         };
       }
-    }
+    })
   );
 
   // Register align_distribute_objects tool

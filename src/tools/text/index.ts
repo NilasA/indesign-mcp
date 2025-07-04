@@ -100,14 +100,24 @@ export async function registerTextTools(server: McpServer): Promise<void> {
         app.changeGrepPreferences = NothingEnum.nothing;
         
         app.findGrepPreferences.findWhat = "${findText}";
-        app.changeGrepPreferences.changeTo = "${replaceText}";
-        
-        var found = doc.changeGrep(${allOccurrences ? "true" : "false"});
+        var changedCount = 0;
+        if (${allOccurrences}) {
+          // Replace all occurrences in one go
+          app.changeGrepPreferences.changeTo = "${replaceText}";
+          changedCount = doc.changeGrep().length;
+        } else {
+          // Replace only the first match
+          var matches = doc.findGrep();
+          if (matches.length > 0) {
+            matches[0].contents = "${replaceText}";
+            changedCount = 1;
+          }
+        }
         
         app.findGrepPreferences = NothingEnum.nothing;
         app.changeGrepPreferences = NothingEnum.nothing;
         
-        "Replaced " + found.length + " occurrence(s) in " + doc.name;
+        "Replaced " + changedCount + " occurrence(s) in " + doc.name;
       `;
       
       const result = await executeExtendScript(script);
@@ -155,14 +165,23 @@ export async function registerTextTools(server: McpServer): Promise<void> {
         app.changeGrepPreferences = NothingEnum.nothing;
         
         app.findGrepPreferences.findWhat = "${textToRemove}";
-        app.changeGrepPreferences.changeTo = "";
-        
-        var found = doc.changeGrep(${allOccurrences ? "true" : "false"});
+        var removedCount = 0;
+        if (${allOccurrences}) {
+          // Remove all occurrences by replacing with empty string
+          app.changeGrepPreferences.changeTo = "";
+          removedCount = doc.changeGrep().length;
+        } else {
+          var hits = doc.findGrep();
+          if (hits.length > 0) {
+            hits[0].remove();
+            removedCount = 1;
+          }
+        }
         
         app.findGrepPreferences = NothingEnum.nothing;
         app.changeGrepPreferences = NothingEnum.nothing;
         
-        "Removed " + found.length + " occurrence(s) from " + doc.name;
+        "Removed " + removedCount + " occurrence(s) from " + doc.name;
       `;
       
       const result = await executeExtendScript(script);

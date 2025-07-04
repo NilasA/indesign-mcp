@@ -8,7 +8,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { TextContent } from "@modelcontextprotocol/sdk/types.js";
 import { executeExtendScript, escapeExtendScriptString } from "../../extendscript.js";
 import { markInDesignStatusChecked } from "../layout/index.js";
+import { toPoints } from "../../utils/coords.js";
 import type { SpecialCharacterType, LayerAction, LayerColor, TextPosition } from "../../types.js";
+import { withChangeTracking } from "../../utils/changeSummary.js";
 
 /**
  * Registers special features tools with the MCP server
@@ -24,12 +26,12 @@ export async function registerSpecialTools(server: McpServer): Promise<void> {
         "section_symbol", "paragraph_symbol", "bullet", "ellipsis",
         "forced_line_break", "column_break", "frame_break", "page_break"
       ]).describe("Type of special character to insert"),
-      position: z.enum(["cursor", "end", "start"]).default("end").describe("Where to insert"),
+      position: z.enum(["selection", "end", "start"]).default("end").describe("Where to insert"),
       story_index: z.number().int().default(0).describe("Story index (0-based)")
     },
-    async (args) => {
+    withChangeTracking(server, "insert_special_character")(async (args: any) => {
       return await handleInsertSpecialCharacter(args);
-    }
+    })
   );
 
   // Register manage_layers tool
@@ -52,10 +54,10 @@ export async function registerSpecialTools(server: McpServer): Promise<void> {
     {
       rows: z.number().int().describe("Number of rows"),
       columns: z.number().int().describe("Number of columns"),
-      x: z.number().describe("X position"),
-      y: z.number().describe("Y position"),
-      width: z.number().describe("Table width"),
-      height: z.number().describe("Table height")
+      x: z.union([z.number(), z.string()]).describe("X position (supports units: 100, '50mm', '2in', '72pt', '50%')"),
+      y: z.union([z.number(), z.string()]).describe("Y position (supports units: 100, '50mm', '2in', '72pt', '50%')"),
+      width: z.union([z.number(), z.string()]).describe("Table width (supports units: 100, '50mm', '2in', '72pt', '50%')"),
+      height: z.union([z.number(), z.string()]).describe("Table height (supports units: 100, '50mm', '2in', '72pt', '50%')")
     },
     async (args) => {
       return await handleCreateTable(args);
@@ -118,7 +120,7 @@ async function handleInsertSpecialCharacter(args: any): Promise<{ content: TextC
     } else if ("${position}" === "end") {
       insertionPoint = story.insertionPoints[-1];
     } else {
-      // Use current selection or end
+      // selection
       if (app.selection.length > 0 && app.selection[0].hasOwnProperty("insertionPoints")) {
         insertionPoint = app.selection[0].insertionPoints[0];
       } else {
@@ -162,7 +164,8 @@ async function handleManageLayers(args: any): Promise<{ content: TextContent[] }
         
         var newLayer = doc.layers.add();
         newLayer.name = "${layerName}";
-        newLayer.layerColor = UIColors.${layerColor.toUpperCase().replace(/ /g, "_")};
+        var colorEnum = UIColors["${layerColor.toUpperCase().replace(/ /g, "_")}"] || UIColors.LIGHT_BLUE;
+        newLayer.layerColor = colorEnum;
         result = "Created layer '" + "${layerName}" + "'";
         break;
         
@@ -254,29 +257,69 @@ async function handleCreateTable(args: any): Promise<{ content: TextContent[] }>
   
   const rows = args.rows;
   const columns = args.columns;
-  const x = args.x;
-  const y = args.y;
-  const width = args.width;
-  const height = args.height;
+  
+  // Get page dimensions for unit conversion (use defaults if not available)
+  const pageDimsScript = `
+    if (app.documents.length === 0) {
+      throw new Error("No documents are open in InDesign. Please open a document first.");
+    }
+    var doc = app.activeDocument;
+    var page = doc.pages[0];
+    var bounds = page.bounds;
+    JSON.stringify({ width: bounds[3] - bounds[1], height: bounds[2] - bounds[0] });
+  `;
+  
+  let pageWidth = 612; // Default US Letter width in points
+  let pageHeight = 792; // Default US Letter height in points
+  
+  try {
+    const pageDimsResult = await executeExtendScript(pageDimsScript);
+    if (pageDimsResult.success && pageDimsResult.result) {
+      const dims = JSON.parse(pageDimsResult.result);
+      pageWidth = dims.width;
+      pageHeight = dims.height;
+    }
+  } catch (e) {
+    // Use defaults if page dimension detection fails
+  }
+  
+  const x = toPoints(args.x!, "x", pageWidth, pageHeight);
+  const y = toPoints(args.y!, "y", pageWidth, pageHeight);
+  const width = toPoints(args.width!, "w", pageWidth, pageHeight);
+  const height = toPoints(args.height!, "h", pageWidth, pageHeight);
   
   const script = `
     var doc = app.activeDocument;
-    var page = doc.pages[0]; // Create on first page by default
     
-    // Create a text frame first
-    var textFrame = page.textFrames.add();
-    textFrame.geometricBounds = [${y}, ${x}, ${y + height}, ${x + width}];
-    
-    // Create table in the text frame
-    var table = textFrame.tables.add();
-    table.bodyRowCount = ${rows};
-    table.columnCount = ${columns};
-    
-    // Set some basic formatting
-    table.width = ${width};
-    table.height = ${height};
-    
-    "Created table with " + ${rows} + " rows and " + ${columns} + " columns";
+    var oldUnit = app.scriptPreferences.measurementUnit;
+    var oldHU = doc.viewPreferences.horizontalMeasurementUnits;
+    var oldVU = doc.viewPreferences.verticalMeasurementUnits;
+    try {
+      app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+      doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.POINTS;
+      doc.viewPreferences.verticalMeasurementUnits = MeasurementUnits.POINTS;
+      
+      var page = doc.pages[0]; // Create on first page by default
+      
+      // Create a text frame first
+      var textFrame = page.textFrames.add();
+      textFrame.geometricBounds = [${y}, ${x}, ${y + height}, ${x + width}];
+      
+      // Create table in the text frame
+      var table = textFrame.tables.add();
+      table.bodyRowCount = ${rows};
+      table.columnCount = ${columns};
+      
+      // Set some basic formatting
+      table.width = ${width};
+      table.height = ${height};
+      
+      "Created table with " + ${rows} + " rows and " + ${columns} + " columns";
+    } finally {
+      app.scriptPreferences.measurementUnit = oldUnit;
+      doc.viewPreferences.horizontalMeasurementUnits = oldHU;
+      doc.viewPreferences.verticalMeasurementUnits = oldVU;
+    }
   `;
   
   const result = await executeExtendScript(script);
@@ -289,50 +332,38 @@ async function handleCreateTable(args: any): Promise<{ content: TextContent[] }>
   };
 }
 
+// ------------------------------ InDesign Status -------------------------------
+
 async function handleInDesignStatus(_args: any): Promise<{ content: TextContent[] }> {
   const script = `
-    var status = "=== InDesign Status ===\\n";
-    status += "Application: " + app.name + " " + app.version + "\\n";
-    status += "Documents open: " + app.documents.length + "\\n";
+    var status = [];
+    status.push("=== InDesign Status ===");
+    status.push("Application: " + app.name + " " + app.version);
+    status.push("Documents open: " + app.documents.length);
     
     if (app.documents.length > 0) {
       var doc = app.activeDocument;
-      status += "Active document: " + doc.name + "\\n";
-      status += "Document stories: " + doc.stories.length + "\\n";
-      status += "Document pages: " + doc.pages.length + "\\n";
-      
+      status.push("Active document: " + doc.name);
+      status.push("Document stories: " + doc.stories.length);
+      status.push("Document pages: " + doc.pages.length);
       if (doc.stories.length > 0) {
-        status += "\\nFirst story preview: " + doc.stories[0].contents.substring(0, 100) + "...\\n";
+        status.push("\nFirst story preview: " + doc.stories[0].contents.substring(0, 100) + "...");
       }
     } else {
-      status += "\\nNo documents are currently open.\\n";
-      status += "Please open or create a document in InDesign.\\n";
+      status.push("\nNo documents are currently open.");
     }
-    
-    status;
+    status.join("\n");
   `;
-  
+
   const result = await executeExtendScript(script);
-  
-  // Mark status check as completed for workflow tracking
   if (result.success) {
+    // Let layout tools know status verified
     markInDesignStatusChecked();
   }
-  
   return {
     content: [{
       type: "text",
-      text: result.success ? 
-        `${result.result}
-
-📋 WORKFLOW CONTEXT: InDesign status verified. Layout tools now know application state is valid.
-💡 NEXT STEPS: Check page dimensions with get_page_dimensions() or document content with get_document_text().` :
-        `❌ Error checking InDesign status: ${result.error}
-
-💡 TROUBLESHOOTING:
-• Ensure Adobe InDesign is running
-• Check InDesign is not busy with other operations
-• Verify system has sufficient resources`
+      text: result.success ? result.result! : `Error checking InDesign status: ${result.error}`
     }]
   };
 }

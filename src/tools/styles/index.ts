@@ -237,15 +237,21 @@ async function handleApplyParagraphStyle(args: any): Promise<{ content: TextCont
         }
       }
     } else if ("${targetText}" === "") {
-      // Apply to current selection
       if (app.selection.length > 0 && app.selection[0].hasOwnProperty("paragraphs")) {
         var selection = app.selection[0];
         for (var j = 0; j < selection.paragraphs.length; j++) {
           selection.paragraphs[j].appliedParagraphStyle = targetStyle;
           appliedCount++;
         }
+      } else if (doc.stories.length > 0) {
+        // No selection; apply to whole first story
+        var fullStory = doc.stories[0];
+        for (var p = 0; p < fullStory.paragraphs.length; p++) {
+          fullStory.paragraphs[p].appliedParagraphStyle = targetStyle;
+          appliedCount++;
+        }
       } else {
-        throw new Error("No text selection found. Provide target_text or story_index/paragraph_range.");
+        throw new Error("No text content available to apply style.");
       }
     } else {
       // Find and apply to specific text

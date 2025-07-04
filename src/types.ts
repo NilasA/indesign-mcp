@@ -79,7 +79,7 @@ export type TextAlignment = "left" | "center" | "right" | "justify";
 /**
  * Position options for text insertion
  */
-export type TextPosition = "start" | "end" | "after_selection" | "cursor";
+export type TextPosition = "start" | "end" | "after_selection" | "selection";
 
 /**
  * Selection types for text range selection

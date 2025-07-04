@@ -7,6 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { executeExtendScript, escapeExtendScriptString } from "../../extendscript.js";
 import type { ExportFormat, ExportQuality } from "../../types.js";
 import { updatePageDimensionsCache } from "../layout/index.js";
+import { toPoints } from "../../utils/coords.js";
 import { z } from "zod";
 import { promises as fs } from "fs";
 import { mkdirSync } from "fs";
@@ -358,10 +359,10 @@ export async function registerExportTools(server: McpServer): Promise<void> {
     "place_file",
     {
       filePath: z.string().describe("Path to file to place (must be a valid local file path)"),
-      x: z.number().default(72).describe("X position for placed content"),
-      y: z.number().default(72).describe("Y position for placed content"),
-      width: z.number().default(200).describe("Width for placed content"),
-      height: z.number().default(200).describe("Height for placed content"),
+      x: z.union([z.number(), z.string()]).default(72).describe("X position for placed content (supports units: 100, '50mm', '2in', '72pt', '50%')"),
+      y: z.union([z.number(), z.string()]).default(72).describe("Y position for placed content (supports units: 100, '50mm', '2in', '72pt', '50%')"),
+      width: z.union([z.number(), z.string()]).default(200).describe("Width for placed content (supports units: 100, '50mm', '2in', '72pt', '50%')"),
+      height: z.union([z.number(), z.string()]).default(200).describe("Height for placed content (supports units: 100, '50mm', '2in', '72pt', '50%')"),
       link_file: z.boolean().default(true).describe("Link to file instead of embedding"),
       fit_content: z.boolean().default(true).describe("Automatically fit content to frame")
     },
@@ -371,10 +372,36 @@ export async function registerExportTools(server: McpServer): Promise<void> {
         throw new Error("filePath parameter is required");
       }
       const escapedPath3 = escapeExtendScriptString(filePath);
-      const x = args.x || 72;
-      const y = args.y || 72;
-      const width = args.width || 200;
-      const height = args.height || 200;
+      
+      // Get page dimensions for unit conversion (use defaults if not available)
+      const pageDimsScript = `
+        if (app.documents.length === 0) {
+          throw new Error("No documents are open in InDesign. Please open a document first.");
+        }
+        var doc = app.activeDocument;
+        var page = doc.pages[0];
+        var bounds = page.bounds;
+        JSON.stringify({ width: bounds[3] - bounds[1], height: bounds[2] - bounds[0] });
+      `;
+      
+      let pageWidth = 612; // Default US Letter width in points
+      let pageHeight = 792; // Default US Letter height in points
+      
+      try {
+        const pageDimsResult = await executeExtendScript(pageDimsScript);
+        if (pageDimsResult.success && pageDimsResult.result) {
+          const dims = JSON.parse(pageDimsResult.result);
+          pageWidth = dims.width;
+          pageHeight = dims.height;
+        }
+      } catch (e) {
+        // Use defaults if page dimension detection fails
+      }
+      
+      const x = toPoints(args.x ?? 72, "x", pageWidth, pageHeight);
+      const y = toPoints(args.y ?? 72, "y", pageWidth, pageHeight);
+      const width = toPoints(args.width ?? 200, "w", pageWidth, pageHeight);
+      const height = toPoints(args.height ?? 200, "h", pageWidth, pageHeight);
       const _linkFile = args.link_file !== false;
       const fitContent = args.fit_content !== false;
 
@@ -388,7 +415,14 @@ export async function registerExportTools(server: McpServer): Promise<void> {
           throw new Error("No active document found.");
         }
         
+        var oldUnit = app.scriptPreferences.measurementUnit;
+        var oldHU = doc.viewPreferences.horizontalMeasurementUnits;
+        var oldVU = doc.viewPreferences.verticalMeasurementUnits;
         try {
+          app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+          doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.POINTS;
+          doc.viewPreferences.verticalMeasurementUnits = MeasurementUnits.POINTS;
+          
           var placeFile = new File("${escapedPath3}");
           if (!placeFile.exists) {
             throw new Error("File does not exist: ${escapedPath3}");
@@ -428,6 +462,10 @@ export async function registerExportTools(server: McpServer): Promise<void> {
           
         } catch (e) {
           throw new Error("Place file failed: " + e.message);
+        } finally {
+          app.scriptPreferences.measurementUnit = oldUnit;
+          doc.viewPreferences.horizontalMeasurementUnits = oldHU;
+          doc.viewPreferences.verticalMeasurementUnits = oldVU;
         }
       `;
 
@@ -455,10 +493,23 @@ export async function registerExportTools(server: McpServer): Promise<void> {
   server.tool(
     "get_page_dimensions",
     {
-      page_number: z.number().default(1).describe("Page number to get dimensions for (1-based), or 0 for all pages")
+      page_number: z.number().default(1).describe("Page number to get dimensions for (1-based), or 0 for all pages"),
+      unit: z.enum(["pt", "mm", "cm", "in", "px"]).default("pt").describe("Unit to display dimensions in (pt=points, mm=millimeters, cm=centimeters, in=inches, px=pixels)")
     },
     async (args) => {
       const _pageNumber = args.page_number || 1;
+      const unit = args.unit || "pt";
+      
+      // Unit conversion factors from points
+      const conversionFactors = {
+        pt: 1,                    // points (no conversion)
+        mm: 1 / 2.834645669,     // 1pt = 0.352777778mm
+        cm: 1 / 28.34645669,     // 1pt = 0.0352777778cm
+        in: 1 / 72,              // 1pt = 0.0138888889in
+        px: 1 / 0.75             // 1pt = 1.333px (assuming 96 DPI)
+      };
+      
+      const factor = conversionFactors[unit as keyof typeof conversionFactors];
 
       const script = `
         (function () {
@@ -467,16 +518,29 @@ export async function registerExportTools(server: McpServer): Promise<void> {
           }
           
           var oldUnit = app.scriptPreferences.measurementUnit;
+          var oldHU = app.activeDocument.viewPreferences.horizontalMeasurementUnits;
+          var oldVU = app.activeDocument.viewPreferences.verticalMeasurementUnits;
           try {
             app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+            app.activeDocument.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.POINTS;
+            app.activeDocument.viewPreferences.verticalMeasurementUnits = MeasurementUnits.POINTS;
             
             var p = app.activeDocument.pages[0];
             var b = p.bounds;               // UnitValues
-            var w = Number(b[3] - b[1]);    // Number in pt
-            var h = Number(b[2] - b[0]);
+            var wPt = Number(b[3] - b[1]);  // Width in points
+            var hPt = Number(b[2] - b[0]);  // Height in points
+            
+            // Convert to requested unit
+            var w = wPt * ${factor};
+            var h = hPt * ${factor};
+            
+            // Format numbers appropriately for the unit
+            var precision = "${unit}" === "pt" ? 6 : ("${unit}" === "in" ? 4 : 2);
+            var wFormatted = w.toFixed(precision).replace(/\\.?0+$/, "");
+            var hFormatted = h.toFixed(precision).replace(/\\.?0+$/, "");
             
             // Always return explicitly
-            return "Page 1: " + w + " × " + h + " pt";
+            return "Page 1: " + wFormatted + " × " + hFormatted + " ${unit}";
           }
           catch (e) {
             // Return the message so the bridge can forward it
@@ -484,6 +548,8 @@ export async function registerExportTools(server: McpServer): Promise<void> {
           }
           finally {
             app.scriptPreferences.measurementUnit = oldUnit;
+            app.activeDocument.viewPreferences.horizontalMeasurementUnits = oldHU;
+            app.activeDocument.viewPreferences.verticalMeasurementUnits = oldVU;
           }
         })();
       `;
@@ -492,10 +558,26 @@ export async function registerExportTools(server: McpServer): Promise<void> {
 
       if (result.success && result.result) {
         // Parse dimensions from result and update cache for layout tools
-        const dimensionMatch = result.result.match(/(\d+(?:\.\d+)?)\s*×\s*(\d+(?:\.\d+)?)\s*pt/);
+        // Always cache in points regardless of display unit
+        const dimensionMatch = result.result.match(/(\d+(?:\.\d+)?)\s*×\s*(\d+(?:\.\d+)?)\s*(\w+)/);
         if (dimensionMatch) {
-          const width = parseFloat(dimensionMatch[1]);
-          const height = parseFloat(dimensionMatch[2]);
+          let width = parseFloat(dimensionMatch[1]);
+          let height = parseFloat(dimensionMatch[2]);
+          const resultUnit = dimensionMatch[3];
+          
+          // Convert back to points for caching if necessary
+          if (resultUnit !== "pt") {
+            const backConversionFactors = {
+              mm: 2.834645669,
+              cm: 28.34645669,
+              in: 72,
+              px: 0.75
+            };
+            const backFactor = backConversionFactors[resultUnit as keyof typeof backConversionFactors] || 1;
+            width = width * backFactor;
+            height = height * backFactor;
+          }
+          
           updatePageDimensionsCache(width, height);
         }
       }

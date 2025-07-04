@@ -102,13 +102,19 @@ async function validateLayoutPrerequisites(args: any, operation: string): Promis
   if (documentState.knownPageDimensions && operation === "create_textframe") {
     const { width: pageWidth, height: pageHeight } = documentState.knownPageDimensions;
     
-    if (args.x + args.width > pageWidth) {
-      issues.push(`Frame width ${args.width} exceeds page width ${pageWidth}`);
+    // Convert potential string/percentage inputs to points for accurate comparison
+    const numericX = (typeof args.x === 'number') ? args.x : toPoints(args.x, 'x', pageWidth, pageHeight);
+    const numericWidth = (typeof args.width === 'number') ? args.width : toPoints(args.width, 'w', pageWidth, pageHeight);
+    const numericY = (typeof args.y === 'number') ? args.y : toPoints(args.y, 'y', pageWidth, pageHeight);
+    const numericHeight = (typeof args.height === 'number') ? args.height : toPoints(args.height, 'h', pageWidth, pageHeight);
+
+    if (!isNaN(numericX) && !isNaN(numericWidth) && numericX + numericWidth > pageWidth) {
+      issues.push(`Frame width ${numericX + numericWidth} exceeds page width ${pageWidth}`);
       recommendations.push("Reduce frame width or check page bounds with get_page_dimensions()");
     }
-    
-    if (args.y + args.height > pageHeight) {
-      issues.push(`Frame height ${args.height} exceeds page height ${pageHeight}`);
+
+    if (!isNaN(numericY) && !isNaN(numericHeight) && numericY + numericHeight > pageHeight) {
+      issues.push(`Frame height ${numericY + numericHeight} exceeds page height ${pageHeight}`);
       recommendations.push("Reduce frame height or check page bounds with get_page_dimensions()");
     }
   }
@@ -178,15 +184,15 @@ export function markFontsChecked(): void {
  * Enhanced error response with strategic guidance
  */
 function createGuidedErrorResponse(error: string, operation: string, recommendations: string[]): { content: TextContent[] } {
-  const errorMessage = `❌ WORKFLOW ERROR: ${error}
+  const errorMessage = `WORKFLOW ERROR: ${error}
 
-📋 NEXT STEPS:
-${recommendations.map(r => `• ${r}`).join('\n')}
+NEXT STEPS:
+${recommendations.map(r => `- ${r}`).join('\n')}
 
-💡 STRATEGIC GUIDANCE:
+STRATEGIC GUIDANCE:
 Use document_creation_strategy prompt → Layout Operations for complete workflow guidance.
 
-🔗 RELATED TOOLS: get_page_dimensions, get_textframe_info, indesign_status`;
+RELATED TOOLS: get_page_dimensions, get_textframe_info, indesign_status`;
 
   return {
     content: [{
@@ -239,14 +245,32 @@ async function handlePositionTextFrame(args: any): Promise<{ content: TextConten
 
   const script = `
     var doc = app.activeDocument;
-    var page = doc.layoutWindows[0].activePage;
-    var frame = page.textFrames[${textFrameIndex}];
-    if(!frame) { throw new Error('Text frame index out of range'); }
-    frame.move([${xPt}, ${yPt}]);
-    if (${wPt} > 0 && ${hPt} > 0) {
-      frame.geometricBounds = [${yPt}, ${xPt}, ${yPt + hPt}, ${xPt + wPt}];
+    
+    var oldUnit = app.scriptPreferences.measurementUnit;
+    var oldHU = doc.viewPreferences.horizontalMeasurementUnits;
+    var oldVU = doc.viewPreferences.verticalMeasurementUnits;
+    try {
+      app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+      doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.POINTS;
+      doc.viewPreferences.verticalMeasurementUnits = MeasurementUnits.POINTS;
+      
+      var page = doc.layoutWindows[0].activePage;
+      var frame = page.textFrames[${textFrameIndex}];
+      if(!frame) { throw new Error('Text frame index out of range'); }
+      // Helper to create point UnitValues
+      function pt(v) { return UnitValue(v, "pt"); }
+      frame.move([pt(${xPt}), pt(${yPt})]);
+      if (${wPt} > 0 && ${hPt} > 0) {
+        frame.geometricBounds = [pt(${yPt}), pt(${xPt}), pt(${yPt + hPt}), pt(${xPt + wPt})];
+      }
+      // Force layout update before we restore measurement units
+      doc.recompose();
+      'moved';
+    } finally {
+      app.scriptPreferences.measurementUnit = oldUnit;
+      doc.viewPreferences.horizontalMeasurementUnits = oldHU;
+      doc.viewPreferences.verticalMeasurementUnits = oldVU;
     }
-    'moved';
   `;
   
   const result = await executeExtendScript(script);
@@ -294,12 +318,29 @@ async function handleCreateTextFrame(args: any): Promise<{ content: TextContent[
   const pageNumber = args.page_number || 1;
 
   const jsx = `
+    if (app.documents.length === 0) { throw new Error('No active document'); }
     var doc = app.activeDocument;
     if (doc.pages.length < ${pageNumber}) { throw new Error('Page number out of range'); }
-    var page = doc.pages[${pageNumber-1}];
-    var frame = page.textFrames.add({ geometricBounds: [${yPt}, ${xPt}, ${yPt + hPt}, ${xPt + wPt}] });
-    if ("${escapedText}" !== "") { frame.contents = "${escapedText}"; }
-    'created';
+    
+    var oldUnit = app.scriptPreferences.measurementUnit;
+    var oldHU = doc.viewPreferences.horizontalMeasurementUnits;
+    var oldVU = doc.viewPreferences.verticalMeasurementUnits;
+    try {
+      app.scriptPreferences.measurementUnit = MeasurementUnits.POINTS;
+      doc.viewPreferences.horizontalMeasurementUnits = MeasurementUnits.POINTS;
+      doc.viewPreferences.verticalMeasurementUnits = MeasurementUnits.POINTS;
+      
+      var page = doc.pages[${pageNumber-1}];
+      var frame = page.textFrames.add({ geometricBounds: [${yPt}, ${xPt}, ${yPt + hPt}, ${xPt + wPt}] });
+      if ("${escapedText}" !== "") { frame.contents = "${escapedText}"; }
+      // Ensure any auto-flow or overset adjustments are resolved
+      doc.recompose();
+      'created';
+    } finally {
+      app.scriptPreferences.measurementUnit = oldUnit;
+      doc.viewPreferences.horizontalMeasurementUnits = oldHU;
+      doc.viewPreferences.verticalMeasurementUnits = oldVU;
+    }
   `;
 
   const res = await executeExtendScript(jsx);

@@ -127,7 +127,7 @@ export class ToolModifier {
   /**
    * Find tool registration call in source file
    */
-  private findToolRegistration(sourceFile: SourceFile, toolName: string): CallExpression | null {
+  private findToolRegistration(sourceFile: SourceFile, toolName: string): { call: CallExpression; resolvedSchema: ObjectLiteralExpression | null } | null {
     const toolCalls = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)
       .filter(call => {
         const expr = call.getExpression();
@@ -140,7 +140,34 @@ export class ToolModifier {
         const nameArg = args[0];
         const nameText = nameArg.getText().replace(/['"]/g, '');
         if (nameText === toolName) {
-          return call;
+          // Try to resolve the schema argument
+          const schemaArg = args[1];
+          let resolvedSchema: ObjectLiteralExpression | null = null;
+          
+          if (schemaArg.getKind() === SyntaxKind.ObjectLiteralExpression) {
+            // Direct object literal
+            resolvedSchema = schemaArg as ObjectLiteralExpression;
+          } else if (schemaArg.getKind() === SyntaxKind.Identifier) {
+            // Variable reference - try to find the definition
+            const identifier = schemaArg.asKindOrThrow(SyntaxKind.Identifier);
+            const variableName = identifier.getText();
+            
+            // Find variable declaration
+            const declarations = sourceFile.getVariableDeclarations().filter(decl => 
+              decl.getName() === variableName
+            );
+            
+            if (declarations.length > 0) {
+              const declaration = declarations[0];
+              const initializer = declaration.getInitializer();
+              
+              if (initializer && initializer.getKind() === SyntaxKind.ObjectLiteralExpression) {
+                resolvedSchema = initializer as ObjectLiteralExpression;
+              }
+            }
+          }
+          
+          return { call, resolvedSchema };
         }
       }
     }
@@ -152,12 +179,39 @@ export class ToolModifier {
    * Modify tool description
    */
   private async modifyDescription(sourceFile: SourceFile, improvement: Improvement): Promise<boolean> {
-    const toolCall = this.findToolRegistration(sourceFile, improvement.tool);
-    if (!toolCall) {
+    const toolInfo = this.findToolRegistration(sourceFile, improvement.tool);
+    if (!toolInfo) {
       console.error(`Tool registration not found for: ${improvement.tool}`);
       return false;
     }
     
+    const { call: toolCall, resolvedSchema } = toolInfo;
+    
+    // Use resolved schema if available
+    if (resolvedSchema) {
+      const objLiteral = resolvedSchema;
+      const descProp = objLiteral.getProperty('description');
+      
+      if (descProp && descProp.getKind() === SyntaxKind.PropertyAssignment) {
+        const propAssignment = descProp as PropertyAssignment;
+        const initializer = propAssignment.getInitializer();
+        
+        if (initializer) {
+          // Replace the description
+          initializer.replaceWithText(`"${improvement.proposed.replace(/"/g, '\\"')}"`);
+          return true;
+        }
+      } else {
+        // Add description property
+        objLiteral.addPropertyAssignment({
+          name: 'description',
+          initializer: `"${improvement.proposed.replace(/"/g, '\\"')}"`
+        });
+        return true;
+      }
+    }
+    
+    // Fallback: try to work with the schema argument directly
     const args = toolCall.getArguments();
     if (args.length < 2) {
       console.error('Invalid tool registration format');
@@ -166,9 +220,32 @@ export class ToolModifier {
     
     const schemaArg = args[1];
     
-    // Handle Zod schema format
+    // Handle current schema format: object literal with Zod properties
+    if (schemaArg.getKind() === SyntaxKind.ObjectLiteralExpression) {
+      const objLiteral = schemaArg as ObjectLiteralExpression;
+      const descProp = objLiteral.getProperty('description');
+      
+      if (descProp && descProp.getKind() === SyntaxKind.PropertyAssignment) {
+        const propAssignment = descProp as PropertyAssignment;
+        const initializer = propAssignment.getInitializer();
+        
+        if (initializer) {
+          // Replace the description
+          initializer.replaceWithText(`"${improvement.proposed.replace(/"/g, '\\"')}"`);
+          return true;
+        }
+      } else {
+        // Add description property
+        objLiteral.addPropertyAssignment({
+          name: 'description',
+          initializer: `"${improvement.proposed.replace(/"/g, '\\"')}"`
+        });
+        return true;
+      }
+    }
+    
+    // Handle legacy Zod schema format: z.object({...})
     if (schemaArg.getKind() === SyntaxKind.CallExpression) {
-      // This is a Zod schema like z.object({...})
       const zodCall = schemaArg as CallExpression;
       const zodArgs = zodCall.getArguments();
       
@@ -196,7 +273,7 @@ export class ToolModifier {
       }
     }
     
-    console.error('Could not find or modify description in Zod schema');
+    console.error('Could not find or modify description in schema');
     return false;
   }
   
@@ -223,7 +300,44 @@ export class ToolModifier {
     
     const schemaArg = args[1];
     
-    // Navigate through Zod schema to find the field
+    // Handle current schema format: object literal with Zod properties
+    if (schemaArg.getKind() === SyntaxKind.ObjectLiteralExpression) {
+      const objLiteral = schemaArg as ObjectLiteralExpression;
+      
+      // Find the specific field property
+      const fieldProp = objLiteral.getProperty(improvement.field);
+      if (!fieldProp || fieldProp.getKind() !== SyntaxKind.PropertyAssignment) {
+        console.error(`Field ${improvement.field} not found`);
+        return false;
+      }
+      
+      const propAssignment = fieldProp as PropertyAssignment;
+      const fieldSchema = propAssignment.getInitializer();
+      
+      if (fieldSchema && fieldSchema.getKind() === SyntaxKind.CallExpression) {
+        // This is a Zod field definition like z.string().describe(...)
+        const fieldCall = fieldSchema as CallExpression;
+        
+        // Look for existing .describe() method call
+        const fieldText = fieldCall.getText();
+        if (fieldText.includes('.describe(')) {
+          // Replace existing describe argument
+          const describeMatch = fieldText.match(/(.+)\.describe\(["']([^"']*)["']\)(.*)$/);
+          if (describeMatch) {
+            const [, before, , after] = describeMatch;
+            const newText = `${before}.describe("${improvement.proposed.replace(/"/g, '\\"')}")${after}`;
+            fieldCall.replaceWithText(newText);
+            return true;
+          }
+        } else {
+          // No describe() found, add one
+          fieldCall.replaceWithText(`${fieldText}.describe("${improvement.proposed.replace(/"/g, '\\"')}")`);
+          return true;
+        }
+      }
+    }
+    
+    // Handle legacy Zod schema format: z.object({ properties... })
     if (schemaArg.getKind() === SyntaxKind.CallExpression) {
       const zodCall = schemaArg as CallExpression;
       
@@ -435,8 +549,56 @@ export class ToolModifier {
     
     const result: { description?: string; parameters?: Record<string, any> } = {};
     
-    // Extract description from Zod schema
+    // Extract description and parameters from schema
     const schemaArg = args[1];
+    
+    // Handle current schema format: object literal with Zod properties
+    if (schemaArg.getKind() === SyntaxKind.ObjectLiteralExpression) {
+      const objLiteral = schemaArg as ObjectLiteralExpression;
+      
+      // Extract tool description if present
+      const descProp = objLiteral.getProperty('description');
+      if (descProp && descProp.getKind() === SyntaxKind.PropertyAssignment) {
+        const propAssignment = descProp as PropertyAssignment;
+        const initializer = propAssignment.getInitializer();
+        
+        if (initializer) {
+          result.description = initializer.getText().replace(/['"]/g, '');
+        }
+      }
+      
+      // Extract parameters
+      result.parameters = {};
+      
+      for (const prop of objLiteral.getProperties()) {
+        if (prop.getKind() === SyntaxKind.PropertyAssignment) {
+          const propAssignment = prop as PropertyAssignment;
+          const name = propAssignment.getName();
+          
+          // Skip non-parameter properties
+          if (name === 'description') continue;
+          
+          // Try to extract description from .describe() calls
+          const initializer = propAssignment.getInitializer();
+          if (initializer && initializer.getKind() === SyntaxKind.CallExpression) {
+            const text = initializer.getText();
+            const descMatch = text.match(/\.describe\(["']([^"']+)["']\)/);
+            
+            if (descMatch) {
+              result.parameters[name] = {
+                description: descMatch[1]
+              };
+            } else {
+              result.parameters[name] = {
+                description: 'No description available'
+              };
+            }
+          }
+        }
+      }
+    }
+    
+    // Handle legacy Zod schema format: z.object({...})
     if (schemaArg.getKind() === SyntaxKind.CallExpression) {
       const zodCall = schemaArg as CallExpression;
       const zodArgs = zodCall.getArguments();

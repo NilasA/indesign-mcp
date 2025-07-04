@@ -31,6 +31,11 @@ export async function registerCompositeTools(server: McpServer): Promise<void> {
         return { content:[{ type:"text", text:`[dry_run] Would flow ${text.length} characters starting at page ${startPage}${style ? ` with style "${style}"` : ""}. Max pages: ${maxPages}. ${preserveExisting ? "Append to" : "Replace"} existing text. Preview: "${preview}"` }] };
       }
       
+      // Ensure progressLogger is always an object with async log()
+      if (!progressLogger || typeof progressLogger.log !== "function") {
+        progressLogger = { log: async () => {} };
+      }
+
       await progressLogger.log("Starting text flow operation", { current: 0, total: 4 });
       
       const escText = escapeExtendScriptString(text);
@@ -166,6 +171,8 @@ export async function registerCompositeTools(server: McpServer): Promise<void> {
               }
               
               frame = newFrame;
+              // Update the reference page for the next iteration
+              page = newPage;
             } else {
               // Cannot thread, frame already has connections
               break;

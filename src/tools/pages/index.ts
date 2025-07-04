@@ -75,7 +75,8 @@ async function handleAddPages(args: any, server: McpServer): Promise<{ content: 
           newPage = doc.pages.add(LocationOptions.AT_END);
           break;
         case "after_current":
-          newPage = doc.pages.add(LocationOptions.AFTER, doc.pages[0]);
+          var currentPage = (app.layoutWindows.length > 0 && app.layoutWindows[0].activePage) ? app.layoutWindows[0].activePage : doc.pages[0];
+          newPage = doc.pages.add(LocationOptions.AFTER, currentPage);
           break;
         default:
           newPage = doc.pages.add(LocationOptions.AT_END);
@@ -120,7 +121,7 @@ async function handleRemovePages(args: any, server: McpServer): Promise<{ conten
   const dry = !!args.dry_run;
 
   // Capture snapshot before operation
-  const before = await captureSnapshot();
+  const before = dry ? null : await captureSnapshot();
   
   const jsx = `
     var doc = app.activeDocument;
@@ -151,7 +152,7 @@ async function handleRemovePages(args: any, server: McpServer): Promise<{ conten
   if(!res.success) return { content:[{ type:"text", text:`Error: ${res.error}` }] };
   
   // Capture snapshot after operation and log changes (only if not dry run)
-  const after = await captureSnapshot();
+  const after = dry ? null : await captureSnapshot();
   if (before && after && res.success && !dry) {
     await logChangeSummary(server, "remove_pages", before, after);
   }
