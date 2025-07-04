@@ -40,12 +40,53 @@ export class EvolutionDashboard {
   }
 
   /**
+   * Check if a port is currently in use
+   */
+  private async isPortInUse(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = http.createServer();
+      
+      server.listen(port, () => {
+        server.close(() => resolve(false));
+      });
+      
+      server.on('error', () => resolve(true));
+    });
+  }
+
+  /**
+   * Find next available port starting from given port
+   */
+  private async findAvailablePort(startPort: number): Promise<number> {
+    let port = startPort;
+    
+    while (port < startPort + 100) { // Try up to 100 ports
+      const inUse = await this.isPortInUse(port);
+      if (!inUse) {
+        return port;
+      }
+      port++;
+    }
+    
+    // If no port found, throw error
+    throw new Error(`No available port found in range ${startPort}-${startPort + 99}`);
+  }
+
+  /**
    * Start the dashboard server
    */
   async start(): Promise<void> {
     if (this.isRunning) {
       console.log('Dashboard already running');
       return;
+    }
+
+    // Check if port is already in use
+    const portInUse = await this.isPortInUse(this.port);
+    if (portInUse) {
+      console.log(`⚠️  Port ${this.port} is already in use, trying next available port...`);
+      this.port = await this.findAvailablePort(this.port);
+      console.log(`🔄 Using port ${this.port} instead`);
     }
 
     console.log(`🌐 Starting Evolution Analytics Dashboard on port ${this.port}...`);

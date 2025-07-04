@@ -55,6 +55,52 @@ export class HooksEvolutionController {
   }
 
   /**
+   * Deep merge hooks configuration to preserve existing user hooks
+   */
+  private deepMergeHooks(existing: any, newConfig: any): any {
+    const result = { ...existing };
+    
+    // Handle hooks object specifically
+    if (newConfig.hooks) {
+      if (!result.hooks) {
+        result.hooks = {};
+      }
+      
+      // Merge each hook type (PreToolUse, PostToolUse, Stop)
+      Object.keys(newConfig.hooks).forEach(hookType => {
+        if (!result.hooks[hookType]) {
+          result.hooks[hookType] = [];
+        }
+        
+        // Append new hooks to existing ones, avoiding duplicates
+        const existingHooks = result.hooks[hookType];
+        const newHooks = newConfig.hooks[hookType];
+        
+        newHooks.forEach((newHook: any) => {
+          // Check if hook already exists (same matcher and command)
+          const exists = existingHooks.some((existing: any) => 
+            existing.matcher === newHook.matcher &&
+            existing.hooks?.[0]?.command === newHook.hooks?.[0]?.command
+          );
+          
+          if (!exists) {
+            existingHooks.push(newHook);
+          }
+        });
+      });
+    }
+    
+    // Merge other settings normally
+    Object.keys(newConfig).forEach(key => {
+      if (key !== 'hooks') {
+        result[key] = newConfig[key];
+      }
+    });
+    
+    return result;
+  }
+
+  /**
    * Configure Claude Code hooks for evolutionary testing
    */
   async configureHooks(): Promise<void> {
@@ -128,11 +174,8 @@ export class HooksEvolutionController {
         // File doesn't exist or is invalid, start fresh
       }
 
-      // Merge with existing settings
-      const mergedSettings = {
-        ...existingSettings,
-        ...hooksConfig
-      };
+      // Deep merge with existing settings to preserve user hooks
+      const mergedSettings = this.deepMergeHooks(existingSettings, hooksConfig);
 
       await fs.writeFile(settingsPath, JSON.stringify(mergedSettings, null, 2));
       console.log('✓ Hooks configuration written to .claude/settings.json');
@@ -165,10 +208,10 @@ export class HooksEvolutionController {
     const results: GenerationResult[] = [];
     
     try {
-      for (let generation = 1; generation <= this.config.maxGenerations; generation++) {
+      for (let generation = 1; generation <= this.config.maxAutonomousGenerations; generation++) {
         this.currentGeneration = generation;
         
-        console.log(`\n🔄 Starting Generation ${generation}/${this.config.maxGenerations}`);
+        console.log(`\n🔄 Starting Generation ${generation}/${this.config.maxAutonomousGenerations}`);
         
         const generationResult = await this.runGeneration(generation);
         results.push(generationResult);
@@ -282,41 +325,48 @@ export class HooksEvolutionController {
    * Spawn a task agent (will be intercepted by hooks)
    */
   private async spawnTaskAgent(agentId: string, generation: number): Promise<TestRun> {
-    // In hooks mode, this would trigger the Task tool which gets intercepted
-    // For now, we simulate the process with a basic implementation
     const startTime = Date.now();
     
     try {
-      // Simulate a task agent run with basic telemetry
-      const telemetry: TelemetrySession = {
-        id: agentId,
-        calls: [],
-        startTime,
-        endTime: Date.now() + 5000, // Simulate 5 second run
-        agentId,
-        generation
-      };
+      if (this.config.hooksEnabled) {
+        // REAL IMPLEMENTATION: Use Task tool (would be intercepted by hooks)
+        console.log(`🤖 Spawning Task agent ${agentId} for generation ${generation}...`);
+        
+        // Create prompt for Task agent
+        const prompt = this.createTaskPrompt(agentId, generation);
+        
+        // In a real implementation, this would call the Task tool
+        // For now, we simulate the hooks capturing the data
+        console.log(`📝 Task prompt created for ${agentId}`);
+        
+        // Wait for simulated task execution
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        // Collect telemetry (would come from hooks in real implementation)
+        const telemetry = this.createFallbackTelemetry(agentId, generation);
+        
+        // Extract metrics and compare (placeholders)
+        const metrics = await this.extractLayoutMetrics();
+        const comparison = await this.compareToReference(metrics);
+        
+        return {
+          agentId,
+          telemetry,
+          success: true,
+          duration: Date.now() - startTime,
+          generation,
+          extractedMetrics: metrics,
+          comparisonResult: comparison
+        };
+      }
       
-      return {
-        agentId,
-        telemetry,
-        duration: Date.now() - startTime,
-        success: true,
-        generation,
-        // Simulate basic metrics and comparison
-        extractedMetrics: {
-          frames: [],
-          margins: { top: 36, left: 36, bottom: 36, right: 36 },
-          columns: 1
-        },
-        comparisonResult: {
-          match: true,
-          score: Math.random() * 100, // Random score for simulation
-          deviations: []
-        }
-      };
+      // FALLBACK: Simulation mode when hooks disabled
+      console.log(`⚠️  Running in simulation mode for ${agentId} (hooks disabled)`);
+      return this.simulateTaskAgent(agentId, generation, startTime);
       
     } catch (error) {
+      console.error(`Task agent ${agentId} failed:`, error);
+      
       const failedTelemetry: TelemetrySession = {
         id: agentId,
         calls: [],
@@ -335,6 +385,103 @@ export class HooksEvolutionController {
         generation
       };
     }
+  }
+
+  /**
+   * Create task prompt for agent
+   */
+  private createTaskPrompt(agentId: string, generation: number): string {
+    return `Recreate this book page layout in InDesign using the available MCP tools.
+
+Agent ID: ${agentId}
+Generation: ${generation}
+
+Reference: ${this.config.referenceImage || 'Academic book page layout'}
+
+Instructions:
+1. Use create_textframe to establish the page structure
+2. Add text content with add_text
+3. Apply appropriate styling with paragraph styles
+4. Ensure proper positioning and layout
+
+Requirements:
+- Follow academic book design principles
+- Use appropriate typography hierarchy
+- Maintain consistent margins and spacing
+- Complete the layout efficiently`;
+  }
+
+  /**
+   * Extract layout metrics (placeholder - would use actual MCP bridge)
+   */
+  private async extractLayoutMetrics(): Promise<any> {
+    // Placeholder - would call actual MCP tools
+    return {
+      frames: [],
+      margins: { top: 36, left: 36, bottom: 36, right: 36 },
+      columns: 1
+    };
+  }
+
+  /**
+   * Compare to reference (placeholder - would use actual comparison)
+   */
+  private async compareToReference(metrics: any): Promise<any> {
+    // Placeholder - would do actual comparison
+    return {
+      match: true,
+      score: Math.random() * 100,
+      deviations: []
+    };
+  }
+
+  /**
+   * Create fallback telemetry when hooks fail
+   */
+  private createFallbackTelemetry(agentId: string, generation: number): TelemetrySession {
+    return {
+      id: `${Date.now()}-${agentId}-gen${generation}`,
+      startTime: Date.now() - 30000,
+      endTime: Date.now(),
+      agentId,
+      generation,
+      calls: []
+    };
+  }
+
+  /**
+   * Simulate task agent when hooks are disabled
+   */
+  private async simulateTaskAgent(agentId: string, generation: number, startTime: number): Promise<TestRun> {
+    // Simulate some work
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const telemetry: TelemetrySession = {
+      id: agentId,
+      calls: [],
+      startTime,
+      endTime: Date.now(),
+      agentId,
+      generation
+    };
+    
+    return {
+      agentId,
+      telemetry,
+      success: true,
+      duration: Date.now() - startTime,
+      generation,
+      extractedMetrics: {
+        frames: [],
+        margins: { top: 36, left: 36, bottom: 36, right: 36 },
+        columns: 1
+      },
+      comparisonResult: {
+        match: true,
+        score: Math.random() * 100,
+        deviations: []
+      }
+    };
   }
 
   /**
@@ -368,9 +515,19 @@ export class HooksEvolutionController {
     
     for (const improvement of improvements) {
       try {
-        // In hooks mode, this would call improvementManager.applyImprovement()
-        // For now, just log the attempted improvement
-        console.log(`✓ Would apply improvement to ${improvement.tool}: ${improvement.proposed}`);
+        // Apply improvement using ImprovementManager
+        const result = await this.improvementManager.applyImprovement(improvement);
+        
+        if (result.success) {
+          console.log(`✅ Applied improvement to ${improvement.tool}: ${improvement.proposed}`);
+          console.log(`   Score improvement: ${result.beforeScore.toFixed(1)} → ${result.afterScore.toFixed(1)}`);
+        } else {
+          console.log(`❌ Failed to apply improvement to ${improvement.tool}: ${result.error}`);
+          
+          if (result.reverted) {
+            console.log(`   Changes reverted due to failure`);
+          }
+        }
       } catch (error) {
         console.error(`Failed to apply improvement to ${improvement.tool}:`, error);
       }

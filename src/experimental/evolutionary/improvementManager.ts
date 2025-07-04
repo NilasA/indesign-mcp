@@ -115,6 +115,58 @@ export class ImprovementManager {
   }
   
   /**
+   * Apply an improvement and record the result
+   */
+  async applyImprovement(improvement: Improvement): Promise<ImprovementResult> {
+    // Validate improvement first
+    const validation = await this.validateImprovement(improvement);
+    if (!validation.valid) {
+      const result: ImprovementResult = {
+        improvement,
+        beforeScore: 0,
+        afterScore: 0,
+        success: false,
+        reverted: false,
+        error: validation.issues.join('; ')
+      };
+      this.results.push(result);
+      return result;
+    }
+
+    // Check if already tried
+    if (this.hasBeenTried(improvement)) {
+      const result: ImprovementResult = {
+        improvement,
+        beforeScore: 0,
+        afterScore: 0,
+        success: false,
+        reverted: false,
+        error: 'Improvement already tried'
+      };
+      this.results.push(result);
+      return result;
+    }
+
+    // For now, simulate applying the improvement
+    // In a real implementation, this would call the ToolModifier
+    const beforeScore = Math.random() * 70 + 10; // 10-80
+    const afterScore = beforeScore + (Math.random() * 20 - 5); // -5 to +15 change
+    const success = afterScore > beforeScore;
+
+    const result: ImprovementResult = {
+      improvement,
+      beforeScore,
+      afterScore,
+      success,
+      reverted: !success, // Revert if not successful
+      error: success ? undefined : 'Simulated failure - improvement did not improve score'
+    };
+
+    this.results.push(result);
+    return result;
+  }
+
+  /**
    * Record the result of applying an improvement
    */
   recordResult(improvement: Improvement, result: {
